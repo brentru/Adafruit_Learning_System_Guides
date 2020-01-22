@@ -15,6 +15,9 @@ from adafruit_minimqtt import MQTT
 from adafruit_pyportal import PyPortal
 from digitalio import DigitalInOut
 
+# Time between polling the STEMMA Soil Sensor, in minutes
+SENSOR_DELAY = 0.5
+
 # Background image
 BACKGROUND = "/images/roots.bmp"
 # Icons for water level and temperature
@@ -25,8 +28,6 @@ WATER_COLOR = 0x0099ff
 
 # the current working directory (where this file is)
 cwd = ("/"+__file__).rsplit('/', 1)[0]
-
-### WiFi ###
 
 # Get wifi details and more from a secrets.py file
 try:
@@ -152,7 +153,7 @@ while not esp.is_connected:
         print("could not connect to AP, retrying: ",e)
         continue
 # Clear once we connect
-print("Connected!")
+print("Connected to WiFi!")
 label_status.text = " "
 
 # Initialize a new MiniMQTT Client object
@@ -164,10 +165,7 @@ mqtt_client = MQTT(
     network_manager=wifi
 )
 
-# Initialize an Adafruit IO MQTT Client
-io = IO_MQTT(mqtt_client)
-
-## Adafruit IO Callback Methods ##
+# Adafruit IO Callback Methods
 def connected(client):
     # Connected function will be called when the client is connected to Adafruit IO.
     print('Connected to Adafruit IO!')
@@ -181,13 +179,58 @@ def disconnected(client):
     # from the Adafruit IO MQTT broker.
     print("Disconnected from Adafruit IO!")
 
+# Initialize an Adafruit IO MQTT Client
+io = IO_MQTT(mqtt_client)
+
 # Connect the callback methods defined above to the Adafruit IO MQTT Client
 io.on_connect = connected
 io.on_subscribe = subscribe
 io.on_disconnect = disconnected
 
 # Connect to Adafruit IO
+print("Connecting to Adafruit IO...")
 io.connect()
+print("Connected!")
+
+# reference time
+initial = time.monotonic()
+
+def display_temperature(temp, is_celsius):
+  """Displays the temperature from the STEMMA soil sensor
+  on the PyPortal Titano.
+  :param float temp: Temperature value.
+  :param bool is_celsius: 
+  """
+  if not is_celsius:
+    temp = (temp * 9 / 5) + 32 - 15
+    print('Temperature: %0.0f°F'%temp)
+    # TODO: REmove? temp_data = '%0.0f'%temp_data
+    return int(temp)
+  else:
+    print('Temperature: %0.0f°C'%temp)
+    temp.text = '%0.0f°C'%temp
+    return(int(temp))
 
 while True:
-  pass
+  # Explicitly pump the message loop
+  io.loop()
+
+  now = time.monotonic()
+  if now - initial > (SENSOR_DELAY * 60):
+    print("reading sensor...")
+    # TODO: read moisture level
+
+    # TODO: display moisture level on pyportal
+    # label_level.text = str(water_level)
+
+    # TODO: read temperature
+
+    # TODO: display temperature on pyportal
+
+    #try:
+      # TODO: send data to adafruit io temperature feed
+      # TODO: send data to adafruit io moisture level feed
+    except (ValueError, RuntimeError) as e:
+      print("Failed to get data, retrying...", e)
+      wifi.reset()
+
