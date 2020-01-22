@@ -98,13 +98,24 @@ water_bmp = displayio.Bitmap(display.width, display.height, len(palette))
 water = displayio.TileGrid(water_bmp, pixel_shader=palette)
 splash.append(water)
 
-print('loading font...')
+print('loading fonts...')
 # Fonts within /fonts/ folder
 font = cwd+"/fonts/GothamBlack-50.bdf"
+font_small = cwd+"/fonts/GothamBlack-25.bdf"
 
-glyphs = b'0123456789FC-° '
+data_glyphs = b'0123456789FC-° '
 font = bitmap_font.load_font(font)
-font.load_glyphs(glyphs)
+font.load_glyphs(data_glyphs)
+
+font_small = bitmap_font.load_font(font_small)
+full_glyphs = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.: '
+font_small.load_glyphs(full_glyphs)
+
+# Label to display Adafruit IO status
+label_status = Label(font_small, text="Connecting...")
+label_status.x = 305
+label_status.y = 10
+splash.append(label_status)
 
 # Create a label to display the temperature
 label_temp = Label(font, max_glyphs=4)
@@ -120,20 +131,10 @@ splash.append(label_level)
 
 # TODO: remove this...
 label_temp.text = "272F"
-label_level.text = "52"
+label_level.text = "152"
 
-# show displayio splash group
+# show splash group
 display.show(splash)
-
-"""
-# Add water to planter
-print("filling")
-print("height: ", HEIGHT)
-for x in range(0, WIDTH-1):
-  for y in range(100, 200):
-    water_bmp[x, y] = 1
-print("filled")
-"""
 
 while True:
   pass
