@@ -10,9 +10,12 @@ import displayio
 from adafruit_pyportal import PyPortal
 from digitalio import DigitalInOut
 
+# Background image
 BACKGROUND = "/images/roots.bmp"
-ICON_WETNESS = "/images/icon-wetness.bmp"
+# Icons for water level and temperature
+ICON_LEVEL = "/images/icon-wetness.bmp"
 ICON_TEMP = "/images/icon-temp.bmp"
+# Water color
 WATER_COLOR = 0x0099ff
 
 # the current working directory (where this file is)
@@ -40,6 +43,9 @@ display = board.DISPLAY
 WIDTH = board.DISPLAY.width
 HEIGHT = board.DISPLAY.height
 
+# TODO: remove this!
+print(WIDTH, HEIGHT)
+
 # Initialize new PyPortal object
 pyportal = PyPortal(esp=esp,
                     external_spi=spi)
@@ -64,13 +70,23 @@ background = displayio.TileGrid(bg_bitmap, pixel_shader=bg_palette)
 splash.append(background)
 
 # Load icons for wetness and temperature
-icon_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
+icon_tmp_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
                                                 bitmap=displayio.Bitmap,
                                                 palette=displayio.Palette)
-icon_temp = displayio.TileGrid(icon_bitmap, pixel_shader=icon_palette)
-icon_temp.x = 0
-icon_temp.y = 300
-splash.append(icon_temp)
+icon_tmp_bitmap = displayio.TileGrid(icon_tmp_bitmap,
+                                      pixel_shader=icon_palette,
+                                      x=0, y=280)
+
+icon_lvl_bitmap, icon_palette = adafruit_imageload.load(ICON_LEVEL,
+                                                bitmap=displayio.Bitmap,
+                                                palette=displayio.Palette)
+icon_lvl_bitmap = displayio.TileGrid(icon_lvl_bitmap,
+                                      pixel_shader=icon_palette,
+                                      x=345, y=280)
+
+# Add icons to display
+splash.append(icon_tmp_bitmap)
+splash.append(icon_lvl_bitmap)
 
 # Palette for water bitmap
 palette = displayio.Palette(2)
@@ -78,9 +94,6 @@ palette[0] = 0x000000
 palette[1] = WATER_COLOR
 palette.make_transparent(0)
 
-
-
-print(WIDTH, HEIGHT)
 water_bmp = displayio.Bitmap(display.width, display.height, len(palette))
 water = displayio.TileGrid(water_bmp, pixel_shader=palette)
 splash.append(water)
@@ -95,7 +108,7 @@ font.load_glyphs(glyphs)
 
 # Create a label to display the temperature
 label_temp = Label(font, max_glyphs=4)
-label_temp.x = 60
+label_temp.x = 35
 label_temp.y = 300
 splash.append(label_temp)
 
@@ -105,9 +118,9 @@ label_level.x = display.width - 95
 label_level.y = 300
 splash.append(label_level)
 
-label_level.text = "252"
-
-label_temp.text = "72F"
+# TODO: remove this...
+label_temp.text = "272F"
+label_level.text = "52"
 
 # show displayio splash group
 display.show(splash)
