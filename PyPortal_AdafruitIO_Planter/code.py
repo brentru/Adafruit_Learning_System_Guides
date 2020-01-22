@@ -1,12 +1,17 @@
 import time
 
-from adafruit_esp32spi import adafruit_esp32spi
-from adafruit_display_text.label import Label
-from adafruit_bitmap_font import bitmap_font
 import adafruit_imageload
 import board
 import busio
 import displayio
+import neopixel
+from adafruit_bitmap_font import bitmap_font
+from adafruit_display_text.label import Label
+from adafruit_esp32spi import adafruit_esp32spi, adafruit_esp32spi_wifimanager
+import adafruit_esp32spi.adafruit_esp32spi_socket as socket
+
+from adafruit_io.adafruit_io import IO_MQTT
+from adafruit_minimqtt import MQTT
 from adafruit_pyportal import PyPortal
 from digitalio import DigitalInOut
 
@@ -21,6 +26,8 @@ WATER_COLOR = 0x0099ff
 # the current working directory (where this file is)
 cwd = ("/"+__file__).rsplit('/', 1)[0]
 
+### WiFi ###
+
 # Get wifi details and more from a secrets.py file
 try:
     from secrets import secrets
@@ -33,9 +40,10 @@ esp32_cs = DigitalInOut(board.ESP_CS)
 esp32_ready = DigitalInOut(board.ESP_BUSY)
 esp32_reset = DigitalInOut(board.ESP_RESET)
  
-# Initialize PyPortal's ESP32
 spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
 esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
+status_light = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.2)
+wifi = adafruit_esp32spi_wifimanager.ESPSPI_WiFiManager(esp, secrets, status_light)
 
 # Initialize PyPortal Display
 display = board.DISPLAY
@@ -135,6 +143,51 @@ label_level.text = "152"
 
 # show splash group
 display.show(splash)
+
+# Connect to WiFi
+while not esp.is_connected:
+    try:
+        wifi.connect()
+    except RuntimeError as e:
+        print("could not connect to AP, retrying: ",e)
+        continue
+# Clear once we connect
+print("Connected!")
+label_status.text = " "
+
+# Initialize a new MiniMQTT Client object
+mqtt_client = MQTT(
+    socket=socket,
+    broker="io.adafruit.com",
+    username=secrets["aio_username"],
+    password=secrets["aio_key"],
+    network_manager=wifi
+)
+
+# Initialize an Adafruit IO MQTT Client
+io = IO_MQTT(mqtt_client)
+
+## Adafruit IO Callback Methods ##
+def connected(client):
+    # Connected function will be called when the client is connected to Adafruit IO.
+    print('Connected to Adafruit IO!')
+
+def subscribe(client, userdata, topic, granted_qos):
+    # This method is called when the client subscribes to a new feed.
+    print('Subscribed to {0} with QOS level {1}'.format(topic, granted_qos))
+
+def disconnected(client):
+    # Disconnected function will be called if the client disconnects
+    # from the Adafruit IO MQTT broker.
+    print("Disconnected from Adafruit IO!")
+
+# Connect the callback methods defined above to the Adafruit IO MQTT Client
+io.on_connect = connected
+io.on_subscribe = subscribe
+io.on_disconnect = disconnected
+
+# Connect to Adafruit IO
+io.connect()
 
 while True:
   pass
