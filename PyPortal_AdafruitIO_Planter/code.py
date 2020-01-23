@@ -131,7 +131,7 @@ full_glyphs = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,
 font_small.load_glyphs(full_glyphs)
 
 # Label to display Adafruit IO status
-label_status = Label(font_small, text="Connecting...")
+label_status = Label(font_small, max_glyphs=20)
 label_status.x = 305
 label_status.y = 10
 splash.append(label_status)
@@ -152,6 +152,7 @@ splash.append(label_level)
 display.show(splash)
 
 # Connect to WiFi
+label_status.text = "Connecting..."
 while not esp.is_connected:
     try:
         wifi.connect()
@@ -160,7 +161,6 @@ while not esp.is_connected:
         continue
 # Clear once we connect
 print("Connected to WiFi!")
-label_status.text = " "
 
 # Initialize a new MiniMQTT Client object
 mqtt_client = MQTT(
@@ -196,6 +196,7 @@ io.on_disconnect = disconnected
 # Connect to Adafruit IO
 print("Connecting to Adafruit IO...")
 io.connect()
+label_status.text = " "
 print("Connected!")
 
 # reference time
@@ -225,31 +226,28 @@ while True:
   now = time.monotonic()
 
   print("reading soil sensor...")
-
-  # TODO: remove simulated sensor values, replace with i2c sensor readings
-  # Read moisture level
-  touch = random.randint(300,1015)
-  label_level.text = str(touch)
-
+  # Read capactive
+  moisture = random.randint(300,1015)
+  label_level.text = str(moisture)
   # Read temperature
   temp = random.uniform(0.000, 30.000)
   display_temperature(temp)
 
-  print("temp: " + str(temp) + "  moisture: " + str(touch))
+  print("temp: " + str(temp) + "  moisture: " + str(moisture))
 
   if now - initial > (DELAY_PUBLISH * 60):
     try:
       print("Publishing data to Adafruit IO...")
       label_status.text = "Sending to IO..."
-
-      # TODO: send data to adafruit io temperature feed
-      # TODO: send data to adafruit io moisture level feed
-      label_status.text = "Sent!"
+      io.publish("moisture", moisture)
+      io.publish("temperature", temp)
+      print("Published")
+      label_status.text = "Data Sent!"
       # reset timer 
       initial = now
     except (ValueError, RuntimeError) as e:
       label_status.text = "ERROR!"
-      print("Failed to get data, retrying...", e)
+      print("Failed to get data, retrying...\n", e)
       wifi.reset()
   time.sleep(DELAY_SENSOR)
 
