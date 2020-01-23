@@ -14,9 +14,15 @@ from adafruit_io.adafruit_io import IO_MQTT
 from adafruit_minimqtt import MQTT
 from adafruit_pyportal import PyPortal
 from digitalio import DigitalInOut
+# TODO: remove this after sensor is here
+import random
+from adafruit_seesaw.seesaw import Seesaw
 
-# Time between polling the STEMMA Soil Sensor, in minutes
-SENSOR_DELAY = 0.5
+# How often to pull the soil sensor, in seconds
+DELAY_SENSOR = 15
+
+# How often to send data to adafruit.io, in minutes
+DELAY_PUBLISH = 1
 
 # Background image
 BACKGROUND = "/images/roots.bmp"
@@ -36,6 +42,13 @@ except ImportError:
     print("WiFi secrets are kept in secrets.py, please add them there!")
     raise
 
+# Set up i2c bus
+i2c_bus = busio.I2C(board.SCL, board.SDA)
+
+# Initialize soil sensor (s.s)
+# TODO: Uncomment!
+# ss = Seesaw(i2c_bus, addr=0x36)
+
 # PyPortal ESP32 AirLift Pins
 esp32_cs = DigitalInOut(board.ESP_CS)
 esp32_ready = DigitalInOut(board.ESP_BUSY)
@@ -51,9 +64,6 @@ display = board.DISPLAY
  
 WIDTH = board.DISPLAY.width
 HEIGHT = board.DISPLAY.height
-
-# TODO: remove this!
-print(WIDTH, HEIGHT)
 
 # Initialize new PyPortal object
 pyportal = PyPortal(esp=esp,
@@ -138,10 +148,6 @@ label_level.x = display.width - 95
 label_level.y = 300
 splash.append(label_level)
 
-# TODO: remove this...
-label_temp.text = "272F"
-label_level.text = "152"
-
 # show splash group
 display.show(splash)
 
@@ -195,7 +201,7 @@ print("Connected!")
 # reference time
 initial = time.monotonic()
 
-def display_temperature(temp, is_celsius):
+def display_temperature(temp, is_celsius=False):
   """Displays the temperature from the STEMMA soil sensor
   on the PyPortal Titano.
   :param float temp: Temperature value.
@@ -204,33 +210,46 @@ def display_temperature(temp, is_celsius):
   if not is_celsius:
     temp = (temp * 9 / 5) + 32 - 15
     print('Temperature: %0.0f°F'%temp)
-    # TODO: REmove? temp_data = '%0.0f'%temp_data
+    label_temp.text = '%0.0f'%temp
     return int(temp)
   else:
     print('Temperature: %0.0f°C'%temp)
-    temp.text = '%0.0f°C'%temp
+    label_temp.text = '%0.0f°C'%temp
     return(int(temp))
 
 while True:
   # Explicitly pump the message loop
+  # to keep the connection active
   io.loop()
 
   now = time.monotonic()
-  if now - initial > (SENSOR_DELAY * 60):
-    print("reading sensor...")
-    # TODO: read moisture level
 
-    # TODO: display moisture level on pyportal
-    # label_level.text = str(water_level)
+  print("reading soil sensor...")
 
-    # TODO: read temperature
+  # TODO: remove simulated sensor values, replace with i2c sensor readings
+  # Read moisture level
+  touch = random.randint(300,1015)
+  label_level.text = str(touch)
 
-    # TODO: display temperature on pyportal
+  # Read temperature
+  temp = random.uniform(0.000, 30.000)
+  display_temperature(temp)
 
-    #try:
+  print("temp: " + str(temp) + "  moisture: " + str(touch))
+
+  if now - initial > (DELAY_PUBLISH * 60):
+    try:
+      print("Publishing data to Adafruit IO...")
+      label_status.text = "Sending to IO..."
+
       # TODO: send data to adafruit io temperature feed
       # TODO: send data to adafruit io moisture level feed
+      label_status.text = "Sent!"
+      # reset timer 
+      initial = now
     except (ValueError, RuntimeError) as e:
+      label_status.text = "ERROR!"
       print("Failed to get data, retrying...", e)
       wifi.reset()
+  time.sleep(DELAY_SENSOR)
 
