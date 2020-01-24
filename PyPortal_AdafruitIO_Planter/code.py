@@ -1,21 +1,20 @@
 import time
 
-import adafruit_esp32spi.adafruit_esp32spi_socket as socket
-import adafruit_imageload
 import board
 import busio
+from digitalio import DigitalInOut
+import adafruit_esp32spi.adafruit_esp32spi_socket as socket
+from adafruit_esp32spi import adafruit_esp32spi, adafruit_esp32spi_wifimanager
+import adafruit_imageload
 import displayio
 import neopixel
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text.label import Label
-from adafruit_esp32spi import adafruit_esp32spi, adafruit_esp32spi_wifimanager
 from adafruit_io.adafruit_io import IO_MQTT
 from adafruit_minimqtt import MQTT
 from adafruit_pyportal import PyPortal
 from adafruit_seesaw.seesaw import Seesaw
-from digitalio import DigitalInOut
 from simpleio import map_range
-
 
 #---| User Config |---------------
 
@@ -60,7 +59,7 @@ ss = Seesaw(i2c_bus, addr=0x36)
 esp32_cs = DigitalInOut(board.ESP_CS)
 esp32_ready = DigitalInOut(board.ESP_BUSY)
 esp32_reset = DigitalInOut(board.ESP_RESET)
- 
+
 spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
 esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
 status_light = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.2)
@@ -68,7 +67,7 @@ wifi = adafruit_esp32spi_wifimanager.ESPSPI_WiFiManager(esp, secrets, status_lig
 
 # Initialize PyPortal Display
 display = board.DISPLAY
- 
+
 WIDTH = board.DISPLAY.width
 HEIGHT = board.DISPLAY.height
 
@@ -88,11 +87,10 @@ palette[0] = 0x000000
 palette[1] = WATER_COLOR
 palette.make_transparent(0)
 
+# Create water bitmap
 water_bmp = displayio.Bitmap(display.width, display.height, len(palette))
 water = displayio.TileGrid(water_bmp, pixel_shader=palette)
 splash.append(water)
-# Initially fill the display completely
-fill_val = 0.0
 
 print("drawing background..")
 # Load background image
@@ -117,7 +115,8 @@ print('loading fonts...')
 font = cwd+"/fonts/GothamBlack-50.bdf"
 font_small = cwd+"/fonts/GothamBlack-25.bdf"
 
-data_glyphs = b'0123456789FC-° '
+# pylint: disable=syntax-error
+data_glyphs = b'0123456789FC-* '
 font = bitmap_font.load_font(font)
 font.load_glyphs(data_glyphs)
 
@@ -138,7 +137,7 @@ label_temp.y = 300
 splash.append(label_temp)
 
 # Create a label to display the water level
-label_level = Label(font, text="1000")
+label_level = Label(font, max_glyphs=4)
 label_level.x = display.width - 130
 label_level.y = 300
 splash.append(label_level)
@@ -146,22 +145,22 @@ splash.append(label_level)
 print('loading icons...')
 # Load temperature icon
 icon_tmp_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
-                                                bitmap=displayio.Bitmap,
-                                                palette=displayio.Palette)
+                                                        bitmap=displayio.Bitmap,
+                                                        palette=displayio.Palette)
 icon_palette.make_transparent(0)
 icon_tmp_bitmap = displayio.TileGrid(icon_tmp_bitmap,
-                                      pixel_shader=icon_palette,
-                                      x=0, y=280)
+                                     pixel_shader=icon_palette,
+                                     x=0, y=280)
 splash.append(icon_tmp_bitmap)
 
 # Load level icon
 icon_lvl_bitmap, icon_palette = adafruit_imageload.load(ICON_LEVEL,
-                                                bitmap=displayio.Bitmap,
-                                                palette=displayio.Palette)
+                                                        bitmap=displayio.Bitmap,
+                                                        palette=displayio.Palette)
 icon_palette.make_transparent(0)
 icon_lvl_bitmap = displayio.TileGrid(icon_lvl_bitmap,
-                                      pixel_shader=icon_palette,
-                                      x=320, y=280)
+                                     pixel_shader=icon_palette,
+                                     x=315, y=280)
 splash.append(icon_lvl_bitmap)
 
 # Connect to WiFi
@@ -173,7 +172,6 @@ while not esp.is_connected:
         print("could not connect to AP, retrying: ",e)
         wifi.reset()
         continue
-# Clear once we connect
 print("Connected to WiFi!")
 
 # Initialize a new MiniMQTT Client object
@@ -186,6 +184,7 @@ mqtt_client = MQTT(
 )
 
 # Adafruit IO Callback Methods
+# pylint: disable=unused-argument
 def connected(client):
     # Connected function will be called when the client is connected to Adafruit IO.
     print('Connected to Adafruit IO!')
@@ -194,6 +193,7 @@ def subscribe(client, userdata, topic, granted_qos):
     # This method is called when the client subscribes to a new feed.
     print('Subscribed to {0} with QOS level {1}'.format(topic, granted_qos))
 
+# pylint: disable=unused-argument
 def disconnected(client):
     # Disconnected function will be called if the client disconnects
     # from the Adafruit IO MQTT broker.
@@ -213,15 +213,14 @@ io.connect()
 label_status.text = " "
 print("Connected!")
 
-# reference time
-initial = time.monotonic()
-
+fill_val = 0.0
 def fill_water(fill_percent):
     """Fills the background water.
     :param float fill_percent: Percentage of the display to fill.
 
     """
     assert fill_percent <= 1.0, "Water fill value may not be > 100%"
+    # pylint: disable=global-statement
     global fill_val
 
     if fill_val > fill_percent:
@@ -236,61 +235,63 @@ def fill_water(fill_percent):
                 water_bmp[_x, _y] = 1
     fill_val = fill_percent
 
-def display_temperature(temp, is_celsius=False):
-  """Displays the temperature from the STEMMA soil sensor
-  on the PyPortal Titano.
-  :param float temp: Temperature value.
-  :param bool is_celsius: 
+def display_temperature(temp_val, is_celsius=False):
+    """Displays the temperature from the STEMMA soil sensor
+    on the PyPortal Titano.
+    :param float temp: Temperature value.
+    :param bool is_celsius:
 
-  """
-  if not is_celsius:
-    temp = (temp * 9 / 5) + 32 - 15
-    print('Temperature: %0.0f°F'%temp)
-    label_temp.text = '%0.0f'%temp
-    return int(temp)
-  else:
-    print('Temperature: %0.0f°C'%temp)
-    label_temp.text = '%0.0f°C'%temp
-    return(int(temp))
+    """
+    if not is_celsius:
+        temp_val = (temp_val * 9 / 5) + 32 - 15
+        print('Temperature: %0.0f*F'%temp_val)
+        label_temp.text = '%0.0f*F'%temp_val
+        return int(temp_val)
+    else:
+        print('Temperature: %0.0f*C'%temp_val)
+        label_temp.text = '%0.0f*C'%temp_val
+        return int(temp_val)
 
+# initial reference time
+initial = time.monotonic()
 while True:
-  # Explicitly pump the message loop
-  # to keep the connection active
-  io.loop()
-  now = time.monotonic()
+    # Explicitly pump the message loop
+    # to keep the connection active
+    io.loop()
+    now = time.monotonic()
 
-  print("reading soil sensor...")
-  # Read capactive
-  moisture = ss.moisture_read()
-  label_level.text = str(moisture)
+    print("reading soil sensor...")
+    # Read capactive
+    moisture = ss.moisture_read()
+    label_level.text = str(moisture)
 
-  # Convert into percentage for filling the screen
-  moisture_percentage = map_range(float(moisture), SOIL_LEVEL_MIN, SOIL_LEVEL_MAX, 0.0, 1.0)
-  print("{}%".format(moisture_percentage))
+    # Convert into percentage for filling the screen
+    moisture_percentage = map_range(float(moisture), SOIL_LEVEL_MIN, SOIL_LEVEL_MAX, 0.0, 1.0)
+    print("{}%".format(moisture_percentage))
 
-  print("filling disp..")
-  fill_water(moisture_percentage)
-  print("disp filled..")
+    print("filling disp..")
+    fill_water(moisture_percentage)
+    print("disp filled..")
 
-  # Read temperature
-  temp = ss.get_temp()
-  display_temperature(temp)
+    # Read temperature
+    temp = ss.get_temp()
+    display_temperature(temp)
 
-  print("temp: " + str(temp) + "  moisture: " + str(moisture))
+    print("temp: " + str(temp) + "  moisture: " + str(moisture))
 
-  if now - initial > (DELAY_PUBLISH * 60):
-    try:
-      print("Publishing data to Adafruit IO...")
-      label_status.text = "Sending to IO..."
-      io.publish("moisture", moisture)
-      io.publish("temperature", temp)
-      print("Published")
-      label_status.text = "Data Sent!"
+    if now - initial > (DELAY_PUBLISH * 60):
+        try:
+            print("Publishing data to Adafruit IO...")
+            label_status.text = "Sending to IO..."
+            io.publish("moisture", moisture)
+            io.publish("temperature", temp)
+            print("Published")
+            label_status.text = "Data Sent!"
 
-      # reset timer
-      initial = now
-    except (ValueError, RuntimeError) as e:
-      label_status.text = "ERROR!"
-      print("Failed to get data, retrying...\n", e)
-      wifi.reset()
-  time.sleep(DELAY_SENSOR)
+            # reset timer
+            initial = now
+        except (ValueError, RuntimeError) as e:
+            label_status.text = "ERROR!"
+            print("Failed to get data, retrying...\n", e)
+            wifi.reset()
+    time.sleep(DELAY_SENSOR)
