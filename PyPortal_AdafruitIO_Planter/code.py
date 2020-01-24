@@ -112,25 +112,6 @@ background = displayio.TileGrid(bg_bitmap, pixel_shader=bg_palette)
 # Add background to display
 splash.append(background)
 
-print("drawing icons..")
-# Load icons for wetness and temperature
-icon_tmp_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
-                                                bitmap=displayio.Bitmap,
-                                                palette=displayio.Palette)
-icon_palette.make_transparent(0)
-icon_tmp_bitmap = displayio.TileGrid(icon_tmp_bitmap,
-                                      pixel_shader=icon_palette,
-                                      x=0, y=280)
-
-icon_lvl_bitmap, icon_palette = adafruit_imageload.load(ICON_LEVEL,
-                                                bitmap=displayio.Bitmap,
-                                                palette=displayio.Palette)
-icon_palette.make_transparent(0)
-icon_lvl_bitmap = displayio.TileGrid(icon_lvl_bitmap,
-                                      pixel_shader=icon_palette,
-                                      x=345, y=280)
-
-
 print('loading fonts...')
 # Fonts within /fonts/ folder
 font = cwd+"/fonts/GothamBlack-50.bdf"
@@ -157,12 +138,12 @@ label_temp.y = 300
 splash.append(label_temp)
 
 # Create a label to display the water level
-#label_level = Label(font, max_glyphs=4)
 label_level = Label(font, text="1000")
-label_level.x = display.width - 95
+label_level.x = display.width - 130
 label_level.y = 300
 splash.append(label_level)
 
+print('loading icons...')
 # Load temperature icon
 icon_tmp_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
                                                 bitmap=displayio.Bitmap,
@@ -180,7 +161,7 @@ icon_lvl_bitmap, icon_palette = adafruit_imageload.load(ICON_LEVEL,
 icon_palette.make_transparent(0)
 icon_lvl_bitmap = displayio.TileGrid(icon_lvl_bitmap,
                                       pixel_shader=icon_palette,
-                                      x=345, y=280)
+                                      x=320, y=280)
 splash.append(icon_lvl_bitmap)
 
 # Connect to WiFi
