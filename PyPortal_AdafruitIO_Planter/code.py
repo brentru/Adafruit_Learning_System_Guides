@@ -1,5 +1,6 @@
 import time
 
+import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 import adafruit_imageload
 import board
 import busio
@@ -8,15 +9,12 @@ import neopixel
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text.label import Label
 from adafruit_esp32spi import adafruit_esp32spi, adafruit_esp32spi_wifimanager
-import adafruit_esp32spi.adafruit_esp32spi_socket as socket
-
 from adafruit_io.adafruit_io import IO_MQTT
 from adafruit_minimqtt import MQTT
 from adafruit_pyportal import PyPortal
-from digitalio import DigitalInOut
-# TODO: remove this after sensor is here
-import random
 from adafruit_seesaw.seesaw import Seesaw
+from digitalio import DigitalInOut
+from simpleio import map_range
 
 # How often to pull the soil sensor, in seconds
 DELAY_SENSOR = 15
@@ -46,8 +44,7 @@ except ImportError:
 i2c_bus = busio.I2C(board.SCL, board.SDA)
 
 # Initialize soil sensor (s.s)
-# TODO: Uncomment!
-# ss = Seesaw(i2c_bus, addr=0x36)
+ss = Seesaw(i2c_bus, addr=0x36)
 
 # PyPortal ESP32 AirLift Pins
 esp32_cs = DigitalInOut(board.ESP_CS)
@@ -72,6 +69,19 @@ pyportal = PyPortal(esp=esp,
 # Create a new DisplayIO group
 splash = displayio.Group(max_size=15)
 
+# show splash group
+display.show(splash)
+
+# Palette for water bitmap
+palette = displayio.Palette(2)
+palette[0] = 0x000000
+palette[1] = WATER_COLOR
+palette.make_transparent(0)
+
+water_bmp = displayio.Bitmap(display.width, display.height, len(palette))
+water = displayio.TileGrid(water_bmp, pixel_shader=palette)
+splash.append(water)
+
 # Load background image
 try:
     bg_bitmap, bg_palette = adafruit_imageload.load(BACKGROUND,
@@ -83,39 +93,9 @@ except (OSError, TypeError):
     bg_bitmap = displayio.Bitmap(display.width, display.height, 1)
     bg_palette = displayio.Palette(1)
     bg_palette[0] = BACKGROUND
+    bg_palette.make_transparent(0)
 background = displayio.TileGrid(bg_bitmap, pixel_shader=bg_palette)
-
-# Add background to display
 splash.append(background)
-
-# Load icons for wetness and temperature
-icon_tmp_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
-                                                bitmap=displayio.Bitmap,
-                                                palette=displayio.Palette)
-icon_tmp_bitmap = displayio.TileGrid(icon_tmp_bitmap,
-                                      pixel_shader=icon_palette,
-                                      x=0, y=280)
-
-icon_lvl_bitmap, icon_palette = adafruit_imageload.load(ICON_LEVEL,
-                                                bitmap=displayio.Bitmap,
-                                                palette=displayio.Palette)
-icon_lvl_bitmap = displayio.TileGrid(icon_lvl_bitmap,
-                                      pixel_shader=icon_palette,
-                                      x=345, y=280)
-
-# Add icons to display
-splash.append(icon_tmp_bitmap)
-splash.append(icon_lvl_bitmap)
-
-# Palette for water bitmap
-palette = displayio.Palette(2)
-palette[0] = 0x000000
-palette[1] = WATER_COLOR
-palette.make_transparent(0)
-
-water_bmp = displayio.Bitmap(display.width, display.height, len(palette))
-water = displayio.TileGrid(water_bmp, pixel_shader=palette)
-splash.append(water)
 
 print('loading fonts...')
 # Fonts within /fonts/ folder
@@ -148,8 +128,25 @@ label_level.x = display.width - 95
 label_level.y = 300
 splash.append(label_level)
 
-# show splash group
-display.show(splash)
+# Load temperature icon
+icon_tmp_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
+                                                bitmap=displayio.Bitmap,
+                                                palette=displayio.Palette)
+icon_palette.make_transparent(0)
+icon_tmp_bitmap = displayio.TileGrid(icon_tmp_bitmap,
+                                      pixel_shader=icon_palette,
+                                      x=0, y=280)
+splash.append(icon_tmp_bitmap)
+
+# Load level icon
+icon_lvl_bitmap, icon_palette = adafruit_imageload.load(ICON_LEVEL,
+                                                bitmap=displayio.Bitmap,
+                                                palette=displayio.Palette)
+icon_palette.make_transparent(0)
+icon_lvl_bitmap = displayio.TileGrid(icon_lvl_bitmap,
+                                      pixel_shader=icon_palette,
+                                      x=345, y=280)
+splash.append(icon_lvl_bitmap)
 
 # Connect to WiFi
 label_status.text = "Connecting..."
@@ -202,11 +199,30 @@ print("Connected!")
 # reference time
 initial = time.monotonic()
 
+def fill_water(fill_percent):
+    """Fills the background water.
+    :param float fill_percent: Percentage of the display to fill.
+
+    """
+    global fill_val
+    assert fill_percent <= 1.0, "Water fill value may not be > 100%"
+    if fill_val > fill_percent:
+        for _y in range(l, l2):
+            for _x in range(1, board.DISPLAY.width-1):
+                water_bmp[_x, _y] = 0
+    else:
+        for _y in range(board.DISPLAY.height-1,
+                        (board.DISPLAY.height-1) - ((board.DISPLAY.height-1)*fill_percent), -1):
+            for _x in range(1, board.DISPLAY.width-1):
+                water_bmp[_x, _y] = 1
+    fill_val = fill_percent
+
 def display_temperature(temp, is_celsius=False):
   """Displays the temperature from the STEMMA soil sensor
   on the PyPortal Titano.
   :param float temp: Temperature value.
   :param bool is_celsius: 
+
   """
   if not is_celsius:
     temp = (temp * 9 / 5) + 32 - 15
@@ -218,6 +234,8 @@ def display_temperature(temp, is_celsius=False):
     label_temp.text = '%0.0f°C'%temp
     return(int(temp))
 
+# fill level state variable, used for fill_water method
+fill_val = 0.0
 while True:
   # Explicitly pump the message loop
   # to keep the connection active
@@ -227,10 +245,10 @@ while True:
 
   print("reading soil sensor...")
   # Read capactive
-  moisture = random.randint(300,1015)
+  moisture = ss.moisture_read()
   label_level.text = str(moisture)
   # Read temperature
-  temp = random.uniform(0.000, 30.000)
+  temp = ss.get_temp()
   display_temperature(temp)
 
   print("temp: " + str(temp) + "  moisture: " + str(moisture))
@@ -250,4 +268,3 @@ while True:
       print("Failed to get data, retrying...\n", e)
       wifi.reset()
   time.sleep(DELAY_SENSOR)
-
