@@ -33,7 +33,6 @@ SOIL_LEVEL_MIN= 300.0
 
 #---| End User Config |---------------
 
-
 # Background image
 BACKGROUND = "/images/roots.bmp"
 # Icons for water level and temperature
@@ -92,6 +91,8 @@ palette.make_transparent(0)
 water_bmp = displayio.Bitmap(display.width, display.height, len(palette))
 water = displayio.TileGrid(water_bmp, pixel_shader=palette)
 splash.append(water)
+# Initially fill the display completely
+fill_val = 0.0
 
 print("drawing background..")
 # Load background image
@@ -156,7 +157,8 @@ label_temp.y = 300
 splash.append(label_temp)
 
 # Create a label to display the water level
-label_level = Label(font, max_glyphs=4)
+#label_level = Label(font, max_glyphs=4)
+label_level = Label(font, text="1000")
 label_level.x = display.width - 95
 label_level.y = 300
 splash.append(label_level)
@@ -245,7 +247,6 @@ def fill_water(fill_percent):
         for _y in range(int((board.DISPLAY.height-1) - ((board.DISPLAY.height-1)*fill_val)),
                         int((board.DISPLAY.height-1) - ((board.DISPLAY.height-1)*fill_percent))):
             for _x in range(1, board.DISPLAY.width-1):
-                #print(_x, _y)
                 water_bmp[_x, _y] = 0
     else:
         for _y in range(board.DISPLAY.height-1,
@@ -270,10 +271,6 @@ def display_temperature(temp, is_celsius=False):
     print('Temperature: %0.0f°C'%temp)
     label_temp.text = '%0.0f°C'%temp
     return(int(temp))
-
-# Initially fill the display completely
-fill_val = 1.0
-fill_water(fill_val)
 
 while True:
   # Explicitly pump the message loop
