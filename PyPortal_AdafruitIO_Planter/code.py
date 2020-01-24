@@ -39,6 +39,10 @@ ICON_LEVEL = "/images/icon-wetness.bmp"
 ICON_TEMP = "/images/icon-temp.bmp"
 WATER_COLOR = 0x16549E
 
+# Audio files
+wav_water_high = "/sounds/water-high.wav"
+wav_water_low = "/sounds/water-low.wav"
+
 # the current working directory (where this file is)
 cwd = ("/"+__file__).rsplit('/', 1)[0]
 
@@ -244,12 +248,12 @@ def display_temperature(temp_val, is_celsius=False):
     """
     if not is_celsius:
         temp_val = (temp_val * 9 / 5) + 32 - 15
-        print('Temperature: %0.0f*F'%temp_val)
-        label_temp.text = '%0.0f*F'%temp_val
+        print('Temperature: %0.0fF'%temp_val)
+        label_temp.text = '%0.0fF'%temp_val
         return int(temp_val)
     else:
-        print('Temperature: %0.0f*C'%temp_val)
-        label_temp.text = '%0.0f*C'%temp_val
+        print('Temperature: %0.0fC'%temp_val)
+        label_temp.text = '%0.0fC'%temp_val
         return int(temp_val)
 
 # initial reference time
@@ -267,7 +271,14 @@ while True:
 
     # Convert into percentage for filling the screen
     moisture_percentage = map_range(float(moisture), SOIL_LEVEL_MIN, SOIL_LEVEL_MAX, 0.0, 1.0)
-    print("{}%".format(moisture_percentage))
+
+    # Play water level alarms
+    if moisture <= SOIL_LEVEL_MIN:
+        print("Playing low water level warning...")
+        pyportal.play_file(wav_water_low)
+    elif moisture >= SOIL_LEVEL_MAX:
+        print("Playing low water level warning...")
+        pyportal.play_file(wav_water_low)
 
     print("filling disp..")
     fill_water(moisture_percentage)
