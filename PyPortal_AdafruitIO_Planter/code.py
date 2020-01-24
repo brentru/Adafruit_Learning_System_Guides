@@ -16,19 +16,30 @@ from adafruit_seesaw.seesaw import Seesaw
 from digitalio import DigitalInOut
 from simpleio import map_range
 
+
+#---| User Config |---------------
+
 # How often to pull the soil sensor, in seconds
 DELAY_SENSOR = 15
 
 # How often to send data to adafruit.io, in minutes
 DELAY_PUBLISH = 1
 
+# Maximum soil moisture measurement
+SOIL_LEVEL_MAX = 500.0
+
+# Minimum soil moisture measurement
+SOIL_LEVEL_MIN= 300.0
+
+#---| End User Config |---------------
+
+
 # Background image
 BACKGROUND = "/images/roots.bmp"
 # Icons for water level and temperature
 ICON_LEVEL = "/images/icon-wetness.bmp"
 ICON_TEMP = "/images/icon-temp.bmp"
-# Water color
-WATER_COLOR = 0x0099ff
+WATER_COLOR = 0x16549E
 
 # the current working directory (where this file is)
 cwd = ("/"+__file__).rsplit('/', 1)[0]
@@ -82,6 +93,7 @@ water_bmp = displayio.Bitmap(display.width, display.height, len(palette))
 water = displayio.TileGrid(water_bmp, pixel_shader=palette)
 splash.append(water)
 
+print("drawing background..")
 # Load background image
 try:
     bg_bitmap, bg_palette = adafruit_imageload.load(BACKGROUND,
@@ -93,9 +105,30 @@ except (OSError, TypeError):
     bg_bitmap = displayio.Bitmap(display.width, display.height, 1)
     bg_palette = displayio.Palette(1)
     bg_palette[0] = BACKGROUND
-    bg_palette.make_transparent(0)
+bg_palette.make_transparent(0)
 background = displayio.TileGrid(bg_bitmap, pixel_shader=bg_palette)
+
+# Add background to display
 splash.append(background)
+
+print("drawing icons..")
+# Load icons for wetness and temperature
+icon_tmp_bitmap, icon_palette = adafruit_imageload.load(ICON_TEMP,
+                                                bitmap=displayio.Bitmap,
+                                                palette=displayio.Palette)
+icon_palette.make_transparent(0)
+icon_tmp_bitmap = displayio.TileGrid(icon_tmp_bitmap,
+                                      pixel_shader=icon_palette,
+                                      x=0, y=280)
+
+icon_lvl_bitmap, icon_palette = adafruit_imageload.load(ICON_LEVEL,
+                                                bitmap=displayio.Bitmap,
+                                                palette=displayio.Palette)
+icon_palette.make_transparent(0)
+icon_lvl_bitmap = displayio.TileGrid(icon_lvl_bitmap,
+                                      pixel_shader=icon_palette,
+                                      x=345, y=280)
+
 
 print('loading fonts...')
 # Fonts within /fonts/ folder
@@ -155,6 +188,7 @@ while not esp.is_connected:
         wifi.connect()
     except RuntimeError as e:
         print("could not connect to AP, retrying: ",e)
+        wifi.reset()
         continue
 # Clear once we connect
 print("Connected to WiFi!")
@@ -204,11 +238,14 @@ def fill_water(fill_percent):
     :param float fill_percent: Percentage of the display to fill.
 
     """
-    global fill_val
     assert fill_percent <= 1.0, "Water fill value may not be > 100%"
+    global fill_val
+
     if fill_val > fill_percent:
-        for _y in range(l, l2):
+        for _y in range(int((board.DISPLAY.height-1) - ((board.DISPLAY.height-1)*fill_val)),
+                        int((board.DISPLAY.height-1) - ((board.DISPLAY.height-1)*fill_percent))):
             for _x in range(1, board.DISPLAY.width-1):
+                #print(_x, _y)
                 water_bmp[_x, _y] = 0
     else:
         for _y in range(board.DISPLAY.height-1,
@@ -234,19 +271,29 @@ def display_temperature(temp, is_celsius=False):
     label_temp.text = '%0.0f°C'%temp
     return(int(temp))
 
-# fill level state variable, used for fill_water method
-fill_val = 0.0
+# Initially fill the display completely
+fill_val = 1.0
+fill_water(fill_val)
+
 while True:
   # Explicitly pump the message loop
   # to keep the connection active
   io.loop()
-
   now = time.monotonic()
 
   print("reading soil sensor...")
   # Read capactive
   moisture = ss.moisture_read()
   label_level.text = str(moisture)
+
+  # Convert into percentage for filling the screen
+  moisture_percentage = map_range(float(moisture), SOIL_LEVEL_MIN, SOIL_LEVEL_MAX, 0.0, 1.0)
+  print("{}%".format(moisture_percentage))
+
+  print("filling disp..")
+  fill_water(moisture_percentage)
+  print("disp filled..")
+
   # Read temperature
   temp = ss.get_temp()
   display_temperature(temp)
@@ -261,7 +308,8 @@ while True:
       io.publish("temperature", temp)
       print("Published")
       label_status.text = "Data Sent!"
-      # reset timer 
+
+      # reset timer
       initial = now
     except (ValueError, RuntimeError) as e:
       label_status.text = "ERROR!"
