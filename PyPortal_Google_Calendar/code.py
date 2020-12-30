@@ -5,9 +5,12 @@ from digitalio import DigitalInOut
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 from adafruit_esp32spi import adafruit_esp32spi
 import adafruit_requests as requests
+# display
 import displayio
 import terminalio
 from adafruit_display_text.label import Label
+import adafruit_miniqr
+
 
 
 # Add a secrets.py to your filesystem that has a dictionary called secrets with "ssid" and
@@ -50,21 +53,79 @@ requests.set_socket(socket, esp)
 
 # Group for displaying verification code and URL
 group_verification = displayio.Group(max_size=25)
-label_verification_url = Label(terminalio.FONT, x=0, y=10, max_glyphs=40)
-label_user_code = Label(terminalio.FONT, x=0, y=40, max_glyphs=15)
+
+# TODO: Center
+label_overview_text = Label(terminalio.FONT,
+                        x=10,
+                        y=0,
+                        text="To authorize this device with GCal")
+group_verification.append(label_overview_text)
+
+# TODO: Center
+label_verification_url = Label(terminalio.FONT,
+                               x=0,
+                               y=100,
+                               max_glyphs=50)
 group_verification.append(label_verification_url)
+
+# TODO: Center
+label_user_code = Label(terminalio.FONT,
+                        x=0,
+                        y=150,
+                        max_glyphs=30)
 group_verification.append(label_user_code)
 
 ### helper methods ###
+def bitmap_QR(matrix):
+    # monochome (2 color) palette
+    BORDER_PIXELS = 2
+
+    # bitmap the size of the screen, monochrome (2 colors)
+    bitmap = displayio.Bitmap(
+        matrix.width + 2 * BORDER_PIXELS, matrix.height + 2 * BORDER_PIXELS, 2
+    )
+    # raster the QR code
+    for y in range(matrix.height):  # each scanline in the height
+        for x in range(matrix.width):
+            if matrix[x, y]:
+                bitmap[x + BORDER_PIXELS, y + BORDER_PIXELS] = 1
+            else:
+                bitmap[x + BORDER_PIXELS, y + BORDER_PIXELS] = 0
+    return bitmap
+
 def display_user_code(user_code, verification_url):
     """Displays the verificaiton URL and user code to the user.
     "param str user_code: identifies scopes requested by the application
     :param str verification_url: url user must navigate to on a browser.
     """
-    # 320 x 240
-    # set labels
-    label_user_code.text = user_code
-    label_verification_url = verification_url
+    print("To authorize this device with Google")
+    print("1)On your computer, go to %s"%verification_url)
+    print("2)Enter code: %s"%user_code)
+    # create display labels
+    label_verification_url.text = "1) Go to: %s"%verification_url
+    label_user_code.text = "2) Enter code: %s"%user_code
+
+    # create a QR code
+    qr = adafruit_miniqr.QRCode(qr_type=3, error_correct=adafruit_miniqr.L)
+    qr.add_data(verification_url.encode())
+    qr.make()
+
+    # generate the 1-pixel-per-bit bitmap
+    qr_bitmap = bitmap_QR(qr.matrix)
+    # We'll draw with a classic black/white palette
+    palette = displayio.Palette(2)
+    palette[0] = 0xFFFFFF
+    palette[1] = 0x000000
+    # we'll scale the QR code as big as the display can handle
+    scale = min(
+        board.DISPLAY.width // qr_bitmap.width, board.DISPLAY.height // qr_bitmap.height
+    )
+    # then center it!
+    pos_x = int(((board.DISPLAY.width / scale) - qr_bitmap.width) / 2)
+    pos_y = int(((board.DISPLAY.height / scale) - qr_bitmap.height) / 2)
+    qr_img = displayio.TileGrid(qr_bitmap, pixel_shader=palette, x=pos_x, y=pos_y)
+    # TODO: Show!
+    #group_verification.append(qr_img)
     # show the group
     board.DISPLAY.show(group_verification)
 
