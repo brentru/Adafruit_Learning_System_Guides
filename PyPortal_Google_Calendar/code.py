@@ -142,7 +142,7 @@ def poll_google_auth_server(interval_time, expiration_time):
     url_auth_endpoint = "https://oauth2.googleapis.com/token?client_id={0}" \
                          "&client_secret={1}&device_code={2}" \
                          "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code".format(
-                         secrets['google_client_id'], secrets['google_client_secret'], device_code)
+                         secrets['google_auth_cid'], secrets['google_auth_secret'], device_code)
     # blocking polling loop to POST to endpoint and wait for response back
     # NOTE: only poll for length of interval, every interval seconds
     start_time = time.monotonic()
@@ -161,15 +161,15 @@ def poll_google_auth_server(interval_time, expiration_time):
             print("Access granted!")
             break
         elif resp_json['error'] == "authorization_pending":
-            print("Authorization pending - waiting for user to complete Browser form...")
+            print("Waiting for user to authorize device on Web Browser...")
         elif resp_json['error'] == "access_denied":
-            print("Error - access denied.")
-        print("Waiting %d seconds.."%interval_time)
+            print("Error - Application access denied.")
+        # sleep for interval_time specified by oauth
         time.sleep(interval_time)
-    print(resp_json)
-    print('Access token: ', resp_json["access_token"])
-    # TODO: print out a formatted version for adding to secrets.py
-
+    # print formatted keys for adding to secrets.py
+    print("Add the following lines to your secrets.py file:")
+    print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%resp_json["access_token"])
+    print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%resp_json["refresh_token"])
 
 # The following steps are used for obtaining OAuth 2.0 access tokens
 # https://developers.google.com/identity/protocols/oauth2/limited-input-device
@@ -179,7 +179,7 @@ def request_device_user_codes():
 
     Returns: json-formatted response
     """
-    URL = "https://oauth2.googleapis.com/device/code?client_id={0}&scope=https://www.googleapis.com/auth/calendar.readonly".format(secrets['google_client_id'])
+    URL = "https://oauth2.googleapis.com/device/code?client_id={0}&scope=https://www.googleapis.com/auth/calendar.readonly".format(secrets['google_auth_cid'])
     HEADERS = {"Host": "oauth2.googleapis.com",
                "Content-Type": "application/x-www-form-urlencoded",
                "Content-Length":"0"}
