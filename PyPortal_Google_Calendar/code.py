@@ -1,4 +1,5 @@
-# PyPortal Google Calendar
+# CircuitPython Google OAuth
+# for PyPortal
 import time
 import board
 import busio
@@ -6,13 +7,10 @@ from digitalio import DigitalInOut
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 from adafruit_esp32spi import adafruit_esp32spi
 import adafruit_requests as requests
-# display
 import displayio
-import terminalio
 from adafruit_display_text.label import Label
+from adafruit_bitmap_font import bitmap_font
 import adafruit_miniqr
-
-
 
 # Add a secrets.py to your filesystem that has a dictionary called secrets with "ssid" and
 # "password" keys with your WiFi credentials. DO NOT share that file or commit it into Git or other
@@ -50,31 +48,40 @@ print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
 socket.set_interface(esp)
 requests.set_socket(socket, esp)
 
-# DisplayIO
+# DisplayIO Setup
+# Set up fonts
+font_small = bitmap_font.load_font("/fonts/Arial-12.bdf")
+font_large = bitmap_font.load_font("/fonts/Arial-14.bdf")
+# preload fonts
+glyphs = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.: '
+font_small.load_glyphs(glyphs)
+font_large.load_glyphs(glyphs)
 
-# Group for displaying verification code and URL
 group_verification = displayio.Group(max_size=25)
-
-# TODO: Center
-label_overview_text = Label(terminalio.FONT,
+label_overview_text = Label(font_large,
                         x=0,
-                        y=15,
-                        text="To authorize this device with GCal")
+                        y=45,
+                        text="To authorize this device with Google:")
 group_verification.append(label_overview_text)
 
-# TODO: Center
-label_verification_url = Label(terminalio.FONT,
+label_verification_url = Label(font_small,
                                x=0,
                                y=100,
-                               max_glyphs=50)
+                               line_spacing=1,
+                               max_glyphs=90)
 group_verification.append(label_verification_url)
 
-# TODO: Center
-label_user_code = Label(terminalio.FONT,
+label_user_code = Label(font_small,
                         x=0,
                         y=150,
-                        max_glyphs=30)
+                        max_glyphs=50)
 group_verification.append(label_user_code)
+
+label_qr_code = Label(font_small,
+                        x=0,
+                        y=190,
+                        text="Or scan the QR code:")
+group_verification.append(label_qr_code)
 
 ### helper methods ###
 def bitmap_QR(matrix):
@@ -94,45 +101,9 @@ def bitmap_QR(matrix):
                 bitmap[x + BORDER_PIXELS, y + BORDER_PIXELS] = 0
     return bitmap
 
-def display_user_code(user_code, verification_url):
-    """Displays the verificaiton URL and user code to the user.
-    "param str user_code: identifies scopes requested by the application
-    :param str verification_url: url user must navigate to on a browser.
-    """
-    print("To authorize this device with Google")
-    print("1)On your computer, go to %s"%verification_url)
-    print("2)Enter code: %s"%user_code)
-    # create display labels
-    label_verification_url.text = "1) Go to: %s"%verification_url
-    label_user_code.text = "2) Enter code: %s"%user_code
-
-    # create a QR code
-    qr = adafruit_miniqr.QRCode(qr_type=3, error_correct=adafruit_miniqr.L)
-    qr.add_data(verification_url.encode())
-    qr.make()
-
-    # generate the 1-pixel-per-bit bitmap
-    qr_bitmap = bitmap_QR(qr.matrix)
-    # We'll draw with a classic black/white palette
-    palette = displayio.Palette(2)
-    palette[0] = 0xFFFFFF
-    palette[1] = 0x000000
-    # we'll scale the QR code as big as the display can handle
-    scale = min(
-        board.DISPLAY.width // qr_bitmap.width, board.DISPLAY.height // qr_bitmap.height
-    )
-    # then center it!
-    pos_x = int(((board.DISPLAY.width / scale) - qr_bitmap.width) / 2)
-    pos_y = int(((board.DISPLAY.height / scale) - qr_bitmap.height) / 2)
-    qr_img = displayio.TileGrid(qr_bitmap, pixel_shader=palette, x=pos_x, y=pos_y)
-    # TODO: Show!
-    #group_verification.append(qr_img)
-    # show the group
-    board.DISPLAY.show(group_verification)
 
 # The following methods are used for obtaining OAuth 2.0 access tokens
 # https://developers.google.com/identity/protocols/oauth2/limited-input-device
-
 def poll_google_auth_server(interval_time, expiration_time):
     """Blocking method which polls Google's authorization server endpoint.
         Returns an access token and refresh token if successful.
@@ -163,10 +134,6 @@ def poll_google_auth_server(interval_time, expiration_time):
         if "access_token" in resp_json:
             print("Access granted!")
             break
-        elif resp_json['error'] == "authorization_pending":
-            print("Waiting for user to authorize device on Web Browser...")
-        elif resp_json['error'] == "access_denied":
-            print("Error - Application access denied.")
         # sleep for interval_time specified by oauth
         time.sleep(interval_time)
     return resp_json["access_token"], resp_json["refresh_token"]
@@ -197,15 +164,53 @@ verification_url = resp['verification_url']
 # identifies scopes requested by the application
 user_code = resp['user_code']
 
-print("Displaying user code and verification URL...")
-display_user_code(user_code, verification_url)
+# Display user code and verification URL
+print("To authorize this device with Google: ")
+print("1)On your computer, go to: %s"%verification_url)
+print("2)Enter code: %s"%user_code)
+
+# modify display labels to show verification URL and user code
+label_verification_url.text = "1. On your computer or mobile device,\n    go to: %s"%verification_url
+label_user_code.text = "2. Enter code: %s"%user_code
+
+# Create a QR code
+qr = adafruit_miniqr.QRCode(qr_type=3, error_correct=adafruit_miniqr.L)
+qr.add_data(verification_url.encode())
+qr.make()
+
+# generate the 1-pixel-per-bit bitmap
+qr_bitmap = bitmap_QR(qr.matrix)
+# we'll draw with a classic black/white palette
+palette = displayio.Palette(2)
+palette[0] = 0xFFFFFF
+palette[1] = 0x000000
+# we'll scale the QR code as big as the display can handle
+scale = 15
+# then center it!
+qr_img = displayio.TileGrid(qr_bitmap,
+                            pixel_shader=palette,
+                            x=170, y=165)
+group_verification.append(qr_img)
+# show the group
+board.DISPLAY.show(group_verification)
+
 
 print("Polling google's auth server...")
 access_token, refresh_token = poll_google_auth_server(polling_time, expiration_time)
+# Store in Non-volatile memory
+
+
 # print formatted keys for adding to secrets.py
 print("Successfully Authenticated!\nAdd the following lines to your secrets.py file:")
 print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%access_token)
 print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%refresh_token)
+# TODO: Check for SD Card
+# Remove QR code and code/verification labels
+group_verification.pop()
+group_verification.pop()
+
+label_overview_text.text = "You are authorized!"
+label_verification_url.text = "Please check the REPL for codes to add to your secrets.py file"
 
 # prevent exit
 while True:
