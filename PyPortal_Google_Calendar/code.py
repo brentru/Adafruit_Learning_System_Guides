@@ -11,6 +11,9 @@ import displayio
 from adafruit_display_text.label import Label
 from adafruit_bitmap_font import bitmap_font
 import adafruit_miniqr
+import sdcardio
+import storage
+
 
 # Add a secrets.py to your filesystem that has a dictionary called secrets with "ssid" and
 # "password" keys with your WiFi credentials. DO NOT share that file or commit it into Git or other
@@ -48,6 +51,17 @@ print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
 socket.set_interface(esp)
 requests.set_socket(socket, esp)
 
+# Init. SD card
+print("Init. PyPortal SD Card")
+sdcard = None
+try:
+    sdcard = sdcardio.SDCard(spi, board.SD_CS)
+    vfs = storage.VfsFat(sdcard)
+    storage.mount(vfs, "/sd")
+    print("Initialized!")
+except OSError as error:
+    print("No SD card found, manually saving to secrets.py:", error)
+
 # DisplayIO Setup
 # Set up fonts
 font_small = bitmap_font.load_font("/fonts/Arial-12.bdf")
@@ -82,6 +96,7 @@ label_qr_code = Label(font_small,
                         y=190,
                         text="Or scan the QR code:")
 group_verification.append(label_qr_code)
+
 
 ### helper methods ###
 def bitmap_QR(matrix):
@@ -197,20 +212,28 @@ board.DISPLAY.show(group_verification)
 
 print("Polling google's auth server...")
 access_token, refresh_token = poll_google_auth_server(polling_time, expiration_time)
-# Store in Non-volatile memory
 
+print("Successfully Authenticated!")
+if sdcard is None:
+    # print formatted keys for adding to secrets.py
+    print("Add the following lines to your secrets.py file:")
+    print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%access_token)
+    print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%refresh_token)
+    # Remove QR code and code/verification labels
+    group_verification.pop()
+    group_verification.pop()
+    group_verification.pop()
 
-# print formatted keys for adding to secrets.py
-print("Successfully Authenticated!\nAdd the following lines to your secrets.py file:")
-print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%access_token)
-print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%refresh_token)
-# TODO: Check for SD Card
-# Remove QR code and code/verification labels
-group_verification.pop()
-group_verification.pop()
-
-label_overview_text.text = "You are authorized!"
-label_verification_url.text = "Please check the REPL for codes to add to your secrets.py file"
+    label_overview_text.text = "Success!"
+    label_verification_url.text = "Check the REPL for tokens to add\nto your secrets.py file"
+else:
+    # write secrets to sd card
+    print("Writing secrets to SD...")
+    with open("/sd/secrets-google.py", "w") as f:
+        f.write('google_secrets = {')
+        f.write('\'google_auth_access_token\' ' + ":" + " \'%s\',"%access_token)
+        f.write('\'google_auth_access_token\' ' + ":" + " \'%s\'}"%access_token)
+    print("Wrote secret google tokens to SD card!")
 
 # prevent exit
 while True:
