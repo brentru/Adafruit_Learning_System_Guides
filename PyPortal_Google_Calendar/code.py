@@ -1,4 +1,5 @@
-# adafruit_requests usage with an esp32spi_socket
+# PyPortal Google Calendar
+import time
 import board
 import busio
 from digitalio import DigitalInOut
@@ -56,8 +57,8 @@ group_verification = displayio.Group(max_size=25)
 
 # TODO: Center
 label_overview_text = Label(terminalio.FONT,
-                        x=10,
-                        y=0,
+                        x=0,
+                        y=15,
                         text="To authorize this device with GCal")
 group_verification.append(label_overview_text)
 
@@ -129,7 +130,6 @@ def display_user_code(user_code, verification_url):
     # show the group
     board.DISPLAY.show(group_verification)
 
-# Poll Google's authorization server
 def poll_google_auth_server(interval_time, expiration_time):
     """Blocking method which polls Google's authorization server endpoint.
     :param int interval_time: Time to wait between requests, in seconds.
@@ -137,15 +137,39 @@ def poll_google_auth_server(interval_time, expiration_time):
 
     """
     # construct request parameters
-    headers_auth_endpoint = {"Content-Type": "application/x-www-form-urlencoded"}
+    headers_auth_endpoint = {"Content-Type": "application/x-www-form-urlencoded",
+                             "Content-Length":"0"}
     url_auth_endpoint = "https://oauth2.googleapis.com/token?client_id={0}" \
-                         "&client_secret={1}&device_code={3}" \
-                         "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"
+                         "&client_secret={1}&device_code={2}" \
+                         "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code".format(
+                         secrets['google_client_id'], secrets['google_client_secret'], device_code)
     # blocking polling loop to POST to endpoint and wait for response back
     # NOTE: only poll for length of interval, every interval seconds
-    pass
+    start_time = time.monotonic()
+    while True:
+        if not time.monotonic() - start_time < expiration_time:
+            print("Code expired, fetching a new code...")
+            # fetch a new code
+            resp = request_device_user_codes()
+            # update the display with the new code
+            display_user_code(resp['user_code'], resp['verification_url'])
+            # TODO: update url_auth_endpoint too!
+        print("Polling auth endpoint")
+        resp = requests.post(url_auth_endpoint, headers=headers_auth_endpoint)
+        resp_json = resp.json()
+        if "access_token" in resp_json:
+            print("Access granted!")
+            break
+        elif resp_json['error'] == "authorization_pending":
+            print("Authorization pending - waiting for user to complete Browser form...")
+        elif resp_json['error'] == "access_denied":
+            print("Error - access denied.")
+        print("Waiting %d seconds.."%interval_time)
+        time.sleep(interval_time)
+    print(resp_json)
+    print('Access token: ', resp_json["access_token"])
+    # TODO: print out a formatted version for adding to secrets.py
 
-###
 
 # The following steps are used for obtaining OAuth 2.0 access tokens
 # https://developers.google.com/identity/protocols/oauth2/limited-input-device
@@ -153,7 +177,7 @@ def request_device_user_codes():
     """Sends a HTTP POST request to Google's authorization server
     that identifies your application and the access scope.
 
-    Returns response object.
+    Returns: json-formatted response
     """
     URL = "https://oauth2.googleapis.com/device/code?client_id={0}&scope=https://www.googleapis.com/auth/calendar.readonly".format(secrets['google_client_id'])
     HEADERS = {"Host": "oauth2.googleapis.com",
@@ -161,31 +185,29 @@ def request_device_user_codes():
                "Content-Length":"0"}
     # TODO: May need to add some handling code if user provides invalid ID
     response = requests.post(URL, headers=HEADERS)
-    return response
+    return response.json()
 
 ### User-Code ###
 print("Requesting device and user codes...")
 resp = request_device_user_codes()
 # Convert to JSON
-json_resp = resp.json()
 # Parse out what we need from the response...
 # unique device identifier
-device_code = json_resp['device_code']
+device_code = resp['device_code']
 # length of time, in seconds that the codes above are valid
-expiration_time = json_resp['expires_in']
+expiration_time = resp['expires_in']
 # length of time we'll wait between polling the auth. server
-polling_time = json_resp['interval']
+polling_time = resp['interval']
 # url user must navigate to on a browser
-verification_url = json_resp['verification_url']
+verification_url = resp['verification_url']
 # identifies scopes requested by the application
-user_code = json_resp['user_code']
+user_code = resp['user_code']
 
 print("Displaying user code and verification URL...")
 display_user_code(user_code, verification_url)
 
-# TODO
 print("Polling google's auth server...")
-# poll_google_auth_server(interval_time, expiration_time)
+poll_google_auth_server(polling_time, expiration_time)
 
 # prevent exit
 while True:
