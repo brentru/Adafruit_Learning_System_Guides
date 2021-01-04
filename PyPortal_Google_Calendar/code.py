@@ -130,8 +130,12 @@ def display_user_code(user_code, verification_url):
     # show the group
     board.DISPLAY.show(group_verification)
 
+# The following methods are used for obtaining OAuth 2.0 access tokens
+# https://developers.google.com/identity/protocols/oauth2/limited-input-device
+
 def poll_google_auth_server(interval_time, expiration_time):
     """Blocking method which polls Google's authorization server endpoint.
+        Returns an access token and refresh token if successful.
     :param int interval_time: Time to wait between requests, in seconds.
     :param int expiration_time: Length of time that the device code is valid, in seconds.
 
@@ -143,8 +147,7 @@ def poll_google_auth_server(interval_time, expiration_time):
                          "&client_secret={1}&device_code={2}" \
                          "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code".format(
                          secrets['google_auth_cid'], secrets['google_auth_secret'], device_code)
-    # blocking polling loop to POST to endpoint and wait for response back
-    # NOTE: only poll for length of interval, every interval seconds
+    # blocking polling loop to POST to endpoint and wait for response
     start_time = time.monotonic()
     while True:
         if not time.monotonic() - start_time < expiration_time:
@@ -153,8 +156,8 @@ def poll_google_auth_server(interval_time, expiration_time):
             resp = request_device_user_codes()
             # update the display with the new code
             display_user_code(resp['user_code'], resp['verification_url'])
-            # TODO: update url_auth_endpoint too!
-        print("Polling auth endpoint")
+            # reset timer
+            start_time = time.monotonic()
         resp = requests.post(url_auth_endpoint, headers=headers_auth_endpoint)
         resp_json = resp.json()
         if "access_token" in resp_json:
@@ -166,13 +169,8 @@ def poll_google_auth_server(interval_time, expiration_time):
             print("Error - Application access denied.")
         # sleep for interval_time specified by oauth
         time.sleep(interval_time)
-    # print formatted keys for adding to secrets.py
-    print("Add the following lines to your secrets.py file:")
-    print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%resp_json["access_token"])
-    print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%resp_json["refresh_token"])
+    return resp_json["access_token"], resp_json["refresh_token"]
 
-# The following steps are used for obtaining OAuth 2.0 access tokens
-# https://developers.google.com/identity/protocols/oauth2/limited-input-device
 def request_device_user_codes():
     """Sends a HTTP POST request to Google's authorization server
     that identifies your application and the access scope.
@@ -183,15 +181,11 @@ def request_device_user_codes():
     HEADERS = {"Host": "oauth2.googleapis.com",
                "Content-Type": "application/x-www-form-urlencoded",
                "Content-Length":"0"}
-    # TODO: May need to add some handling code if user provides invalid ID
     response = requests.post(URL, headers=HEADERS)
     return response.json()
 
-### User-Code ###
 print("Requesting device and user codes...")
 resp = request_device_user_codes()
-# Convert to JSON
-# Parse out what we need from the response...
 # unique device identifier
 device_code = resp['device_code']
 # length of time, in seconds that the codes above are valid
@@ -207,7 +201,11 @@ print("Displaying user code and verification URL...")
 display_user_code(user_code, verification_url)
 
 print("Polling google's auth server...")
-poll_google_auth_server(polling_time, expiration_time)
+access_token, refresh_token = poll_google_auth_server(polling_time, expiration_time)
+# print formatted keys for adding to secrets.py
+print("Successfully Authenticated!\nAdd the following lines to your secrets.py file:")
+print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%access_token)
+print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%refresh_token)
 
 # prevent exit
 while True:
