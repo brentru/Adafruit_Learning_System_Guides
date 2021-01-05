@@ -61,11 +61,9 @@ def refresh_access_token():
           "&client_secret={1}&grant_type=refresh_token" \
           "&refresh_token={2}".format(secrets['google_auth_cid'], \
           secrets['google_auth_secret'], secrets['google_auth_refresh_token'])
-
     HEADERS = {"Host": "oauth2.googleapis.com",
                "Content-Type": "application/x-www-form-urlencoded",
                "Content-Length":"0"}
-
     response = requests.post(URL, headers=HEADERS)
     resp_json = response.json()
     return resp_json['access_token']
@@ -75,16 +73,36 @@ def get_calendar_events(calendar_id, max_events):
 
     """
     URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-          "/events?maxResults={1}&singleEvents=true".format(calendar_id, max_events)
+          "/events?maxResults={1}".format(calendar_id, max_events)
     HEADERS = {'Authorization': 'Bearer ' + access_token,
                'Accept': 'application/json',
                "Content-Length":"0"}
     response = requests.get(URL, headers=HEADERS)
-    print(response.json())
+    return response.json()
 
-print("refreshing access token...")
+# let's fetch a fresh access token, valid for 60mins
 access_token = refresh_access_token()
-print("access token refreshed!")
-
 print("obtaining calendar events..")
-get_calendar_events(CALENDAR_ID, MAX_EVENTS)
+resp = get_calendar_events(CALENDAR_ID, MAX_EVENTS)
+
+# parse out events
+calendar_name = resp['summary']
+print("Calendar: ", calendar_name)
+
+# scrape datetime from last-updated
+calendar_date = resp['updated']
+print("Calendar: ", calendar_date)
+
+
+for idx_event in range(MAX_EVENTS):
+    # Get calendar events
+    event = resp['items'][idx_event]
+    event_name = event['summary']
+    event_start = event['start']['dateTime']
+    event_end = event['end']['dateTime']
+    print("Event name: ", event_name)
+    # TODO: format both of these as datetime
+    print('Event start:' , event_start)
+    print('Event ends:', event_end)
+    print("---")
+
