@@ -7,6 +7,9 @@ from digitalio import DigitalInOut
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 from adafruit_esp32spi import adafruit_esp32spi
 import adafruit_requests as requests
+import displayio
+from adafruit_display_shapes.line import Line
+
 
 # Calendar ID
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
@@ -116,12 +119,37 @@ current_time = resp['updated']
 resp = get_calendar_events(CALENDAR_ID, MAX_EVENTS, current_time)
 # parse out events
 calendar_name = resp['summary']
-print("Calendar: ", calendar_name)
-
 # scrape datetime from last-updated
-calendar_date = resp['updated']
+current_time = resp['updated']
 
+# DisplayIO
+frame = displayio.Group(max_size=15)
+
+# Add a white background
+background = displayio.Group(max_size=1)
+color_bitmap = displayio.Bitmap(
+    board.DISPLAY.width, board.DISPLAY.height, 1
+)
+color_palette = displayio.Palette(1)
+color_palette[0] = 0xFFFFFF
+bg_sprite = displayio.TileGrid(
+        color_bitmap,
+        pixel_shader=color_palette,
+        x=0, y=0)
+background.append(bg_sprite)
+frame.append(background)
+
+# Add the header
+line_header = Line(0, 60, 320, 60, color=0x000000)
+frame.append(line_header)
+# TODO: Add font to header
+
+# Display rows and fill with event details
 for idx_event in range(MAX_EVENTS):
+    # Generate new row to hold event details
+    line_event_row = Line(0, 60*(idx_event+2), 320, 60*(idx_event+2), color=0x000000)
+    frame.append(line_event_row)
+    # Generate new label to hold event info
     # Get calendar events
     event = resp['items'][idx_event]
     event_name = event['summary']
@@ -131,4 +159,11 @@ for idx_event in range(MAX_EVENTS):
     print('Event start:' , format_time(event_start, current_time))
     print('Event ends:', format_time(event_end, current_time))
     print("---")
+    # TODO: Fill labels!
 
+
+
+board.DISPLAY.show(frame)
+
+while True:
+    pass
