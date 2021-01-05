@@ -3,12 +3,14 @@
 import time
 import board
 import busio
+from rtc import RTC
 from digitalio import DigitalInOut
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 from adafruit_esp32spi import adafruit_esp32spi
 import adafruit_requests as requests
 import sdcardio
 import storage
+from adafruit_pyportal import PyPortal
 
 # Calendar ID
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
@@ -47,6 +49,9 @@ print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
 socket.set_interface(esp)
 requests.set_socket(socket, esp)
 
+pyportal = PyPortal(esp=esp, external_spi=spi)
+pyportal.get_local_time()
+
 # Set access and refresh tokens locally so we can refresh them
 access_token = secrets['google_auth_access_token']
 refresh_token = secrets['google_auth_refresh_token']
@@ -68,21 +73,52 @@ def refresh_access_token():
     resp_json = response.json()
     return resp_json['access_token']
 
-def get_calendar_events(calendar_id, max_events):
+def get_calendar_events(calendar_id, max_events, obtain_time=False):
     """Returns events on a specified calendar.
+    Events are returned by their start date/time
 
     """
-    URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-          "/events?maxResults={1}".format(calendar_id, max_events)
+    if obtain_time:
+        URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
+            "/events?maxResults={1}&orderBy=startTime&singleEvents=true".format(calendar_id, max_events)
+    else:
+        URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
+        "/events?maxResults={1}&timeMin={2}&orderBy=startTime&singleEvents=true". \
+        format(calendar_id, max_events, time_now)
     HEADERS = {'Authorization': 'Bearer ' + access_token,
                'Accept': 'application/json',
                "Content-Length":"0"}
     response = requests.get(URL, headers=HEADERS)
     return response.json()
 
+def format_time(timestamp):
+    """Formats an ISO-8601 timestamped time from Google Events API, returns a formatted string.
+
+    :param str timestamp: ISO-8601 timestamp.
+    """
+    times = timestamp.split("T")
+    the_date = times[0]
+    the_time = times[1]
+    year, month, mday = [int(x) for x in the_date.split("-")]
+    the_time = the_time.split("-")[0]
+    hours, minutes, seconds = [int(x) for x in the_time.split(":")]
+    # check if event is happening today
+    if RTC().datetime[2] == mday:
+        print("event today!")
+        return ("{0}:{1}:{2}".format(hours, minutes, seconds))
+    # otherwise return the full timestamp
+    return ("{0}/{1}/{2} {3}:{4}:{5}".format(mday, month, year, hours, minutes, seconds))
+
 # let's fetch a fresh access token, valid for 60mins
+print("refreshing api token...")
 access_token = refresh_access_token()
 print("obtaining calendar events..")
+
+# prefetch calendar events to obtain an RFC3339 timestamp
+resp = get_calendar_events(CALENDAR_ID, 1)
+time_now = resp['timeZone']
+
+# fetch cal events!
 resp = get_calendar_events(CALENDAR_ID, MAX_EVENTS)
 
 # parse out events
@@ -91,7 +127,7 @@ print("Calendar: ", calendar_name)
 
 # scrape datetime from last-updated
 calendar_date = resp['updated']
-print("Calendar: ", calendar_date)
+# TODO: format this as datetime and keep track so we can use for refreshing key
 
 
 for idx_event in range(MAX_EVENTS):
@@ -102,7 +138,7 @@ for idx_event in range(MAX_EVENTS):
     event_end = event['end']['dateTime']
     print("Event name: ", event_name)
     # TODO: format both of these as datetime
-    print('Event start:' , event_start)
-    print('Event ends:', event_end)
+    print('Event start:' , format_time(event_start))
+    print('Event ends:', format_time(event_end))
     print("---")
 
