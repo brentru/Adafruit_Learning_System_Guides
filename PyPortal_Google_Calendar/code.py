@@ -3,14 +3,10 @@
 import time
 import board
 import busio
-from rtc import RTC
 from digitalio import DigitalInOut
 import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 from adafruit_esp32spi import adafruit_esp32spi
 import adafruit_requests as requests
-import sdcardio
-import storage
-from adafruit_pyportal import PyPortal
 
 # Calendar ID
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
