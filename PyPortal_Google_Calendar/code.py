@@ -56,15 +56,19 @@ def refresh_access_token():
     https://developers.google.com/identity/protocols/oauth2/limited-input-device#offline
 
     """
-    URL = "https://oauth2.googleapis.com/token&client_id={0}&client_secret={1}&refresh_token={2}&grant_type=refresh_token".format(secrets['google_auth_cid'], secrets['google_auth_secret'], refresh_token)
+    URL = "https://oauth2.googleapis.com/token?" \
+          "client_id={0}" \
+          "&client_secret={1}&grant_type=refresh_token" \
+          "&refresh_token={2}".format(secrets['google_auth_cid'], \
+          secrets['google_auth_secret'], secrets['google_auth_refresh_token'])
+
     HEADERS = {"Host": "oauth2.googleapis.com",
                "Content-Type": "application/x-www-form-urlencoded",
                "Content-Length":"0"}
+
     response = requests.post(URL, headers=HEADERS)
-    print(response.text)
     resp_json = response.json()
-    print(resp_json)
-    #return resp_json['access_token']
+    return resp_json['access_token']
 
 def get_calendar_events(calendar_id, max_events):
     """Returns events on a specified calendar.
@@ -78,6 +82,9 @@ def get_calendar_events(calendar_id, max_events):
     response = requests.get(URL, headers=HEADERS)
     print(response.json())
 
-#access_token = refresh_access_token()
+print("refreshing access token...")
+access_token = refresh_access_token()
+print("access token refreshed!")
+
 print("obtaining calendar events..")
 get_calendar_events(CALENDAR_ID, MAX_EVENTS)
