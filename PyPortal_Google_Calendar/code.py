@@ -49,9 +49,6 @@ print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
 socket.set_interface(esp)
 requests.set_socket(socket, esp)
 
-pyportal = PyPortal(esp=esp, external_spi=spi)
-pyportal.get_local_time()
-
 # Set access and refresh tokens locally so we can refresh them
 access_token = secrets['google_auth_access_token']
 refresh_token = secrets['google_auth_refresh_token']
@@ -75,11 +72,10 @@ def refresh_access_token():
 
 def get_calendar_events(calendar_id, max_events, time_min=None):
     """Returns events on a specified calendar.
-    Events are returned by their start date/time
+    Response is events ordered by their start date/time in ascending order.
 
     """
     if time_min:
-        print(time_min)
         URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
         "/events?maxResults={1}&timeMin={2}&orderBy=startTime&singleEvents=true".format(calendar_id, max_events, time_min)
     else:
@@ -91,7 +87,7 @@ def get_calendar_events(calendar_id, max_events, time_min=None):
     response = requests.get(URL, headers=HEADERS)
     return response.json()
 
-def format_time(timestamp):
+def format_time(timestamp, current_time):
     """Formats an ISO-8601 timestamped time from Google Events API, returns a formatted string.
 
     :param str timestamp: ISO-8601 timestamp.
@@ -102,9 +98,11 @@ def format_time(timestamp):
     year, month, mday = [int(x) for x in the_date.split("-")]
     the_time = the_time.split("-")[0]
     hours, minutes, seconds = [int(x) for x in the_time.split(":")]
+    # TODO: The following should be stftime formatted better!
     # check if event is happening today
-    if RTC().datetime[2] == mday:
-        print("event today!")
+    curr_date = current_time.split("T")[0]
+    curr_date = curr_date.split("-")[2]
+    if curr_date == mday:
         return ("{0}:{1}:{2}".format(hours, minutes, seconds))
     # otherwise return the full timestamp
     return ("{0}/{1}/{2} {3}:{4}:{5}".format(mday, month, year, hours, minutes, seconds))
@@ -120,14 +118,12 @@ current_time = resp['updated']
 
 # fetch cal events!
 resp = get_calendar_events(CALENDAR_ID, MAX_EVENTS, current_time)
-print(resp)
 # parse out events
 calendar_name = resp['summary']
 print("Calendar: ", calendar_name)
 
 # scrape datetime from last-updated
 calendar_date = resp['updated']
-
 
 for idx_event in range(MAX_EVENTS):
     # Get calendar events
@@ -136,8 +132,7 @@ for idx_event in range(MAX_EVENTS):
     event_start = event['start']['dateTime']
     event_end = event['end']['dateTime']
     print("Event name: ", event_name)
-    # TODO: format both of these as datetime
-    print('Event start:' , format_time(event_start))
-    print('Event ends:', format_time(event_end))
+    print('Event start:' , format_time(event_start, current_time))
+    print('Event ends:', format_time(event_end, current_time))
     print("---")
 
