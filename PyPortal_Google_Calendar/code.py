@@ -73,18 +73,18 @@ def refresh_access_token():
     resp_json = response.json()
     return resp_json['access_token']
 
-def get_calendar_events(calendar_id, max_events, obtain_time=False):
+def get_calendar_events(calendar_id, max_events, time_min=None):
     """Returns events on a specified calendar.
     Events are returned by their start date/time
 
     """
-    if obtain_time:
+    if time_min:
+        print(time_min)
         URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-            "/events?maxResults={1}&orderBy=startTime&singleEvents=true".format(calendar_id, max_events)
+        "/events?maxResults={1}&timeMin={2}&orderBy=startTime&singleEvents=true".format(calendar_id, max_events, time_min)
     else:
         URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-        "/events?maxResults={1}&timeMin={2}&orderBy=startTime&singleEvents=true". \
-        format(calendar_id, max_events, time_now)
+            "/events?maxResults={1}&orderBy=startTime&singleEvents=true".format(calendar_id, max_events)
     HEADERS = {'Authorization': 'Bearer ' + access_token,
                'Accept': 'application/json',
                "Content-Length":"0"}
@@ -116,18 +116,17 @@ print("obtaining calendar events..")
 
 # prefetch calendar events to obtain an RFC3339 timestamp
 resp = get_calendar_events(CALENDAR_ID, 1)
-time_now = resp['timeZone']
+current_time = resp['updated']
 
 # fetch cal events!
-resp = get_calendar_events(CALENDAR_ID, MAX_EVENTS)
-
+resp = get_calendar_events(CALENDAR_ID, MAX_EVENTS, current_time)
+print(resp)
 # parse out events
 calendar_name = resp['summary']
 print("Calendar: ", calendar_name)
 
 # scrape datetime from last-updated
 calendar_date = resp['updated']
-# TODO: format this as datetime and keep track so we can use for refreshing key
 
 
 for idx_event in range(MAX_EVENTS):
