@@ -113,7 +113,7 @@ def get_current_time():
 
 def get_calendar_events(calendar_id, max_events, time_min):
     """Returns events on a specified calendar.
-    Response is events ordered by their start date/time in ascending order.
+    Response is a list of events ordered by their start date/time in ascending order.
     """
     headers = {'Authorization': 'Bearer ' + google_auth.access_token,
                'Accept': 'application/json',
@@ -126,7 +126,12 @@ def get_calendar_events(calendar_id, max_events, time_min):
     if 'error' in resp_json:
         raise RuntimeError("Error:", resp_json)
     resp.close()
-    return resp_json
+    # parse the 'items' array so we can iterate over it easier
+    events = []
+    event_items = resp_json['items']
+    for event in range(0, max_events):
+        events.append(event_items[event])
+    return events
 
 def format_time(timestamp, current_time):
     """Formats an ISO-8601 timestamped time from Google Events API, returns a formatted string.
@@ -148,36 +153,33 @@ def format_time(timestamp, current_time):
     return ("{0}/{1}/{2} {3}:{4}:{5}".format(mday, month, year, hours, minutes, seconds))
 
 def display_calendar_events(events):
-    # Display rows and fill with event details
-    for idx_event in range(MAX_EVENTS):
-        # Generate new row to hold event details
-        line_event_row = Line(0, 60*(idx_event+2), 320, 60*(idx_event+2), color=0x000000)
-        frame.append(line_event_row)
-        # Generate new label to hold event info
-        # TODO
-        # Get calendar events
-        event = events['items'][idx_event]
+    # Display all calendar events
+    for event_idx in range(len(MAX_EVENTS)):
+        event = events[event_idx]
         event_name = event['summary']
         event_start = event['start']['dateTime']
         event_end = event['end']['dateTime']
         print("Event name: ", event_name)
-        print('Event start:' , format_time(event_start, current_time))
-        print('Event ends:', format_time(event_end, current_time))
+        # TODO: Parse the times 
+        print('Event start:' , event_end)
+        print('Event ends:', event_end)
         print("---")
-        # TODO: Fill labels!
+        # TODO
+        # Generate new row to hold event details
+        #line_event_row = Line(0, 60*(idx_event+2), 320, 60*(idx_event+2), color=0x000000)
+        #frame.append(line_event_row)
+        # Generate new label to hold event info
+        # TODO
 
 
 
 while True:
-
     # fetch calendar events!
+    print("fetching local time...")
     now = get_current_time()
+    print("fetching calendar events...")
     events = get_calendar_events(CALENDAR_ID, MAX_EVENTS, now)
-
-    # parse out events
-    calendar_name = resp['summary']
-    # scrape datetime from last-updated
-    current_time = resp['updated']
+    display_calendar_events(events)
 
     # sleep for REFRESH_TIME minutes before fetching data again
     time.sleep(REFRESH_TIME * 60)
