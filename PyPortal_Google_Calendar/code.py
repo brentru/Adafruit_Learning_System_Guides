@@ -190,5 +190,5 @@ while True:
     print("displaying events")
     display_calendar_events(events)
 
-    print("Sleeping for %d minutes"%REFRESH_TIME*60)
+    print("Sleeping for %d minutes"%(REFRESH_TIME*60))
     time.sleep(REFRESH_TIME * 60)
