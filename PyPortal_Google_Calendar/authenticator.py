@@ -13,6 +13,7 @@ from adafruit_bitmap_font import bitmap_font
 import adafruit_miniqr
 import sdcardio
 import storage
+from adafruit_oauth2 import OAuth2
 
 
 # Add a secrets.py to your filesystem that has a dictionary called secrets with "ssid" and
@@ -25,15 +26,9 @@ except ImportError:
     print("WiFi secrets are kept in secrets.py, please add them there!")
     raise
 
-# If you are using a board with pre-defined ESP32 Pins:
 esp32_cs = DigitalInOut(board.ESP_CS)
 esp32_ready = DigitalInOut(board.ESP_BUSY)
 esp32_reset = DigitalInOut(board.ESP_RESET)
-
-# If you have an externally connected ESP32:
-# esp32_cs = DigitalInOut(board.D9)
-# esp32_ready = DigitalInOut(board.D10)
-# esp32_reset = DigitalInOut(board.D5)
 
 spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
 esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
@@ -64,8 +59,8 @@ except OSError as error:
 
 # DisplayIO Setup
 # Set up fonts
-font_small = bitmap_font.load_font("/fonts/Arial-12.bdf")
-font_large = bitmap_font.load_font("/fonts/Arial-14.bdf")
+font_small = bitmap_font.load_font("/fonts/Arial-12.pcf")
+font_large = bitmap_font.load_font("/fonts/Arial-14.pcf")
 # preload fonts
 glyphs = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.: '
 font_small.load_glyphs(glyphs)
@@ -117,80 +112,33 @@ def bitmap_QR(matrix):
     return bitmap
 
 
-# The following methods are used for obtaining OAuth 2.0 access tokens
-# https://developers.google.com/identity/protocols/oauth2/limited-input-device
-def poll_google_auth_server(interval_time, expiration_time):
-    """Blocking method which polls Google's authorization server endpoint.
-        Returns an access token and refresh token if successful.
-    :param int interval_time: Time to wait between requests, in seconds.
-    :param int expiration_time: Length of time that the device code is valid, in seconds.
+# Set scope(s) of access required by the API you're using
+scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
 
-    """
-    # construct request parameters
-    headers_auth_endpoint = {"Content-Type": "application/x-www-form-urlencoded",
-                             "Content-Length":"0"}
-    url_auth_endpoint = "https://oauth2.googleapis.com/token?client_id={0}" \
-                         "&client_secret={1}&device_code={2}" \
-                         "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code".format(
-                         secrets['google_auth_cid'], secrets['google_auth_secret'], device_code)
-    # blocking polling loop to POST to endpoint and wait for response
-    start_time = time.monotonic()
-    while True:
-        if not time.monotonic() - start_time < expiration_time:
-            print("Code expired, fetching a new code...")
-            # fetch a new code
-            resp = request_device_user_codes()
-            # update the display with the new code
-            display_user_code(resp['user_code'], resp['verification_url'])
-            # reset timer
-            start_time = time.monotonic()
-        resp = requests.post(url_auth_endpoint, headers=headers_auth_endpoint)
-        resp_json = resp.json()
-        if "access_token" in resp_json:
-            print("Access granted!")
-            break
-        # sleep for interval_time specified by oauth
-        time.sleep(interval_time)
-    return resp_json["access_token"], resp_json["refresh_token"]
+# Initialize an oauth2 object
+google_auth = OAuth2(requests, secrets['google_client_id'],
+                     secrets['google_client_secret'], scopes)
 
-def request_device_user_codes():
-    """Sends a HTTP POST request to Google's authorization server
-    that identifies your application and the access scope.
 
-    Returns: json-formatted response
-    """
-    URL = "https://oauth2.googleapis.com/device/code?client_id={0}&scope=https://www.googleapis.com/auth/calendar.readonly".format(secrets['google_auth_cid'])
-    HEADERS = {"Host": "oauth2.googleapis.com",
-               "Content-Type": "application/x-www-form-urlencoded",
-               "Content-Length":"0"}
-    response = requests.post(URL, headers=HEADERS)
-    return response.json()
+# Request device and user codes
+# https://developers.google.com/identity/protocols/oauth2/limited-input-device#step-1:-request-device-and-user-codes
+google_auth.request_codes()
 
-print("Requesting device and user codes...")
-resp = request_device_user_codes()
-# unique device identifier
-device_code = resp['device_code']
-# length of time, in seconds that the codes above are valid
-expiration_time = resp['expires_in']
-# length of time we'll wait between polling the auth. server
-polling_time = resp['interval']
-# url user must navigate to on a browser
-verification_url = resp['verification_url']
-# identifies scopes requested by the application
-user_code = resp['user_code']
-
-# Display user code and verification URL
-print("To authorize this device with Google: ")
-print("1)On your computer, go to: %s"%verification_url)
-print("2)Enter code: %s"%user_code)
+# Display user code and verification url
+# NOTE: If you are displaying this on a screen, ensure the text label fields are
+# long enough to handle the user_code and verification_url.
+# Details in link below:
+# https://developers.google.com/identity/protocols/oauth2/limited-input-device#displayingthecode
+print("1) Navigate to the following URL in a web browser:", google_auth.verification_url)
+print("2) Enter the following code:", google_auth.user_code)
 
 # modify display labels to show verification URL and user code
-label_verification_url.text = "1. On your computer or mobile device,\n    go to: %s"%verification_url
-label_user_code.text = "2. Enter code: %s"%user_code
+label_verification_url.text = "1. On your computer or mobile device,\n    go to: %s"%google_auth.verification_url
+label_user_code.text = "2. Enter code: %s"%google_auth.user_code
 
 # Create a QR code
 qr = adafruit_miniqr.QRCode(qr_type=3, error_correct=adafruit_miniqr.L)
-qr.add_data(verification_url.encode())
+qr.add_data(google_auth.verification_url.encode())
 qr.make()
 
 # generate the 1-pixel-per-bit bitmap
@@ -210,22 +158,25 @@ group_verification.append(qr_img)
 board.DISPLAY.show(group_verification)
 
 
-print("Polling google's auth server...")
-access_token, refresh_token = poll_google_auth_server(polling_time, expiration_time)
+# Poll Google's authorization server
+print("Waiting for browser authorization...")
+if not google_auth.wait_for_authorization():
+    raise RuntimeError("Timed out waiting for browser response!")
 
-print("Successfully Authenticated!")
+print("Successfully Authenticated with Google!")
+
 if sdcard is None:
     # print formatted keys for adding to secrets.py
     print("Add the following lines to your secrets.py file:")
-    print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%access_token)
-    print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%refresh_token)
+    print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%google_auth.access_token)
+    print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%google_auth.refresh_token)
     # Remove QR code and code/verification labels
     group_verification.pop()
     group_verification.pop()
     group_verification.pop()
 
-    label_overview_text.text = "Success!"
-    label_verification_url.text = "Check the REPL for tokens to add\nto your secrets.py file"
+    label_overview_text.text = "Successfully Authenticated!"
+    label_verification_url.text = "Check the REPL for tokens to add\n\tto your secrets.py file"
 else:
     # write secrets to sd card
     print("Writing secrets to SD...")
