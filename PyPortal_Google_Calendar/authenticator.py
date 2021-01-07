@@ -168,8 +168,8 @@ print("Successfully Authenticated with Google!")
 if sdcard is None:
     # print formatted keys for adding to secrets.py
     print("Add the following lines to your secrets.py file:")
-    print('\t\'google_auth_access_token\' ' + ":" + " \'%s\',"%google_auth.access_token)
-    print('\t\'google_auth_refresh_token\' ' + ":" + " \'%s\'"%google_auth.refresh_token)
+    print('\t\'google_access_token\' ' + ":" + " \'%s\',"%google_auth.access_token)
+    print('\t\'google_refresh_token\' ' + ":" + " \'%s\'"%google_auth.refresh_token)
     # Remove QR code and code/verification labels
     group_verification.pop()
     group_verification.pop()
