@@ -51,24 +51,28 @@ scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
 google_auth = OAuth2(
     requests, secrets["google_client_id"],
     secrets["google_client_secret"], scopes,
-    ["google_access_token"], ["google_refresh_token"],
+    secrets["google_access_token"],
+    secrets["google_refresh_token"]
 )
 
 # Initial refresh of access token
+print("Refreshing access token..")
 google_auth.refresh_access_token()
 # TODO: Take a timestamp of when we requested this
 # so we can check against expiration!
-
+if not google_auth.refresh_access_token():
+    raise RuntimeError("Unable to refresh access token - has the token been revoked?")
 
 def get_calendar_events(calendar_id, max_events):
     """Returns events on a specified calendar.
 
     """
-    URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
+    header = {'Accept': 'application/json',
+              "Content-Length": "0"}
+    url = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
           "/events?maxResults={1}&singleEvents=true" \
           "&key={2}".format(calendar_id, max_events, google_auth.access_token)
-    HEADERS = {'Accept': 'application/json'}
-    response = requests.post(URL, headers=HEADERS)
+    response = requests.post(url, headers=header)
     return response.json()
 
 print("obtaining calendar events..")
