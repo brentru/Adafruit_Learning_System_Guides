@@ -72,8 +72,6 @@ print("Refreshing access token..")
 # so we can check against expiration!
 if not google_auth.refresh_access_token():
     raise RuntimeError("Unable to refresh access token - has the token been revoked?")
-# TODO: Removeee
-print(google_auth.access_token)
 
 # DisplayIO
 frame = displayio.Group(max_size=15)
@@ -133,36 +131,46 @@ def get_calendar_events(calendar_id, max_events, time_min):
         events.append(event_items[event])
     return events
 
-def format_time(timestamp, current_time):
-    """Formats an ISO-8601 timestamped time from Google Events API, returns a formatted string.
-    :param str timestamp: ISO-8601 timestamp.
+def format_datetime(datetime):
+    """Formats ISO-formatted datetime returned by Google Calendar API into
+    a struct_time.
+    :param str datetime: Datetime string returned by Google Calendar API
+    :return: struct_time
+
     """
-    times = timestamp.split("T")
+    times = datetime.split("T")
     the_date = times[0]
     the_time = times[1]
     year, month, mday = [int(x) for x in the_date.split("-")]
     the_time = the_time.split("-")[0]
     hours, minutes, seconds = [int(x) for x in the_time.split(":")]
-    # TODO: The following should be stftime formatted better!
-    # check if event is happening today
-    curr_date = current_time.split("T")[0]
-    curr_date = curr_date.split("-")[2]
-    if curr_date == mday:
-        return ("{0}:{1}:{2}".format(hours, minutes, seconds))
-    # otherwise return the full timestamp
-    return ("{0}/{1}/{2} {3}:{4}:{5}".format(mday, month, year, hours, minutes, seconds))
+    am_pm = "am"
+    if hours >= 12:
+        am_pm = "pm"
+        # convert to 12hr time
+        hours -= 12
+    # take datetime from rtc
+    current_datetime = r.datetime
+    formatted_time = '{:02d}:{:02d}{:s}'.format(hours, minutes, am_pm)
+    if not current_datetime[2] == mday:
+        # event is another day, return the full datetime
+        formatted_date = '{:02d}/{:02d}/{:04d} '.format(month, mday, year)
+        return formatted_date + formatted_time
+    # Event occurs today, return the time only
+    return formatted_time
 
 def display_calendar_events(events):
     # Display all calendar events
-    for event_idx in range(len(MAX_EVENTS)):
+    for event_idx in range(MAX_EVENTS):
         event = events[event_idx]
+        print(event)
         event_name = event['summary']
         event_start = event['start']['dateTime']
         event_end = event['end']['dateTime']
         print("Event name: ", event_name)
         # TODO: Parse the times 
-        print('Event start:' , event_end)
-        print('Event ends:', event_end)
+        print('Event start:' , format_datetime(event_start))
+        print('Event ends:', format_datetime(event_end))
         print("---")
         # TODO
         # Generate new row to hold event details
@@ -172,14 +180,15 @@ def display_calendar_events(events):
         # TODO
 
 
-
 while True:
     # fetch calendar events!
     print("fetching local time...")
     now = get_current_time()
     print("fetching calendar events...")
     events = get_calendar_events(CALENDAR_ID, MAX_EVENTS, now)
+
+    print("displaying events")
     display_calendar_events(events)
 
-    # sleep for REFRESH_TIME minutes before fetching data again
+    print("Sleeping for %d minutes"%REFRESH_TIME*60)
     time.sleep(REFRESH_TIME * 60)
