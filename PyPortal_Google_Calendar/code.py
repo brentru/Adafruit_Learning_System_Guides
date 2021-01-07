@@ -151,6 +151,7 @@ def format_datetime(datetime):
         hours -= 12
     # take datetime from rtc
     current_datetime = r.datetime
+    # via https://github.com/micropython/micropython/issues/3087
     formatted_time = '{:02d}:{:02d}{:s}'.format(hours, minutes, am_pm)
     if not current_datetime[2] == mday:
         # event is another day, return the full datetime
@@ -163,7 +164,6 @@ def display_calendar_events(events):
     # Display all calendar events
     for event_idx in range(MAX_EVENTS):
         event = events[event_idx]
-        print(event)
         event_name = event['summary']
         event_start = event['start']['dateTime']
         event_end = event['end']['dateTime']
