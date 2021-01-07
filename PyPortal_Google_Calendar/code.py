@@ -10,12 +10,17 @@ import adafruit_requests as requests
 from adafruit_oauth2 import OAuth2
 import displayio
 from adafruit_display_shapes.line import Line
+from adafruit_pyportal import PyPortal
+import rtc
 
 # Calendar ID
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
 
 # Maximum amount of events to display
 MAX_EVENTS = 3
+
+# Amount of time to wait between refreshing the calendar, in minutes
+REFRESH_TIME = 15
 
 # Add a secrets.py to your filesystem that has a dictionary called secrets with "ssid" and
 # "password" keys with your WiFi credentials. DO NOT share that file or commit it into Git or other
@@ -44,11 +49,15 @@ while not esp.is_connected:
         continue
 print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
 
+# Create the PyPortal object
+pyportal = PyPortal(esp=esp, external_spi=spi)
+r = rtc.RTC()
+
 # Initialize a requests object with a socket and esp32spi interface
 socket.set_interface(esp)
 requests.set_socket(socket, esp)
 
-# Initialize an OAuth2 object
+# Initialize an OAuth2 object with GCal API scope
 scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
 google_auth = OAuth2(
     requests, secrets["google_client_id"],
@@ -59,59 +68,12 @@ google_auth = OAuth2(
 
 # Initial refresh of access token
 print("Refreshing access token..")
-google_auth.refresh_access_token()
 # TODO: Take a timestamp of when we requested this
 # so we can check against expiration!
 if not google_auth.refresh_access_token():
     raise RuntimeError("Unable to refresh access token - has the token been revoked?")
-
-def get_calendar_events(calendar_id, max_events, time_min=None):
-    """Returns events on a specified calendar.
-    Response is events ordered by their start date/time in ascending order.
-    """
-    if time_min:
-        URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-        "/events?maxResults={1}&timeMin={2}&orderBy=startTime&singleEvents=true".format(calendar_id, max_events, time_min)
-    else:
-        URL = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-            "/events?maxResults={1}&orderBy=startTime&singleEvents=true".format(calendar_id, max_events)
-    HEADERS = {'Authorization': 'Bearer ' + google_auth.access_token,
-               'Accept': 'application/json',
-               "Content-Length":"0"}
-    response = requests.get(URL, headers=HEADERS)
-    return response.json()
-
-def format_time(timestamp, current_time):
-    """Formats an ISO-8601 timestamped time from Google Events API, returns a formatted string.
-    :param str timestamp: ISO-8601 timestamp.
-    """
-    times = timestamp.split("T")
-    the_date = times[0]
-    the_time = times[1]
-    year, month, mday = [int(x) for x in the_date.split("-")]
-    the_time = the_time.split("-")[0]
-    hours, minutes, seconds = [int(x) for x in the_time.split(":")]
-    # TODO: The following should be stftime formatted better!
-    # check if event is happening today
-    curr_date = current_time.split("T")[0]
-    curr_date = curr_date.split("-")[2]
-    if curr_date == mday:
-        return ("{0}:{1}:{2}".format(hours, minutes, seconds))
-    # otherwise return the full timestamp
-    return ("{0}/{1}/{2} {3}:{4}:{5}".format(mday, month, year, hours, minutes, seconds))
-
-
-# prefetch calendar events to obtain an RFC3339 timestamp
-# TODO: remove, cant rely on this!
-resp = get_calendar_events(CALENDAR_ID, 1)
-current_time = resp['updated']
-
-# fetch cal events!
-resp = get_calendar_events(CALENDAR_ID, MAX_EVENTS, current_time)
-# parse out events
-calendar_name = resp['summary']
-# scrape datetime from last-updated
-current_time = resp['updated']
+# TODO: Removeee
+print(google_auth.access_token)
 
 # DisplayIO
 frame = displayio.Group(max_size=15)
@@ -135,26 +97,87 @@ line_header = Line(0, 60, 320, 60, color=0x000000)
 frame.append(line_header)
 # TODO: Add font to header
 
-# Display rows and fill with event details
-for idx_event in range(MAX_EVENTS):
-    # Generate new row to hold event details
-    line_event_row = Line(0, 60*(idx_event+2), 320, 60*(idx_event+2), color=0x000000)
-    frame.append(line_event_row)
-    # Generate new label to hold event info
-    # Get calendar events
-    event = resp['items'][idx_event]
-    event_name = event['summary']
-    event_start = event['start']['dateTime']
-    event_end = event['end']['dateTime']
-    print("Event name: ", event_name)
-    print('Event start:' , format_time(event_start, current_time))
-    print('Event ends:', format_time(event_end, current_time))
-    print("---")
-    # TODO: Fill labels!
-
-
-
 board.DISPLAY.show(frame)
 
+def get_current_time():
+    """Gets local time from Adafruit IO and converts to RFC3339 timestamp.
+
+    """
+    # Get local time from Adafruit IO
+    pyportal.get_local_time(secrets['timezone'])
+    # Format as RFC339 timestamp
+    cur_time = r.datetime
+    cur_time = '{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{:s}'.format(cur_time[0],
+    cur_time[1], cur_time[2], cur_time[3], cur_time[4], cur_time[5], "Z")
+    return cur_time
+
+def get_calendar_events(calendar_id, max_events, time_min):
+    """Returns events on a specified calendar.
+    Response is events ordered by their start date/time in ascending order.
+    """
+    headers = {'Authorization': 'Bearer ' + google_auth.access_token,
+               'Accept': 'application/json',
+               "Content-Length":"0"}
+    url = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
+    "/events?maxResults={1}&timeMin={2}&orderBy=startTime" \
+    "&singleEvents=true".format(calendar_id, max_events, time_min)
+    resp = requests.get(url, headers=headers)
+    resp_json = resp.json()
+    if 'error' in resp_json:
+        raise RuntimeError("Error:", resp_json)
+    resp.close()
+    return resp_json
+
+def format_time(timestamp, current_time):
+    """Formats an ISO-8601 timestamped time from Google Events API, returns a formatted string.
+    :param str timestamp: ISO-8601 timestamp.
+    """
+    times = timestamp.split("T")
+    the_date = times[0]
+    the_time = times[1]
+    year, month, mday = [int(x) for x in the_date.split("-")]
+    the_time = the_time.split("-")[0]
+    hours, minutes, seconds = [int(x) for x in the_time.split(":")]
+    # TODO: The following should be stftime formatted better!
+    # check if event is happening today
+    curr_date = current_time.split("T")[0]
+    curr_date = curr_date.split("-")[2]
+    if curr_date == mday:
+        return ("{0}:{1}:{2}".format(hours, minutes, seconds))
+    # otherwise return the full timestamp
+    return ("{0}/{1}/{2} {3}:{4}:{5}".format(mday, month, year, hours, minutes, seconds))
+
+def display_calendar_events(events):
+    # Display rows and fill with event details
+    for idx_event in range(MAX_EVENTS):
+        # Generate new row to hold event details
+        line_event_row = Line(0, 60*(idx_event+2), 320, 60*(idx_event+2), color=0x000000)
+        frame.append(line_event_row)
+        # Generate new label to hold event info
+        # TODO
+        # Get calendar events
+        event = events['items'][idx_event]
+        event_name = event['summary']
+        event_start = event['start']['dateTime']
+        event_end = event['end']['dateTime']
+        print("Event name: ", event_name)
+        print('Event start:' , format_time(event_start, current_time))
+        print('Event ends:', format_time(event_end, current_time))
+        print("---")
+        # TODO: Fill labels!
+
+
+
 while True:
-    pass
+
+    # fetch calendar events!
+    now = get_current_time()
+    events = get_calendar_events(CALENDAR_ID, MAX_EVENTS, now)
+
+    # parse out events
+    calendar_name = resp['summary']
+    # scrape datetime from last-updated
+    current_time = resp['updated']
+
+    # sleep for REFRESH_TIME minutes before fetching data again
+    time.sleep(REFRESH_TIME * 60)
