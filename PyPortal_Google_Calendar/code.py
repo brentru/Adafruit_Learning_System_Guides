@@ -81,12 +81,10 @@ def get_current_time(time_max=False):
     pyportal.get_local_time(secrets['timezone'])
     # Format as RFC339 timestamp
     cur_time = r.datetime
-    if time_max: # maximum time to fetch events is tonight at 23:59:59p.
+    if time_max: # maximum time to fetch events is midnight (4:59:59UTC)
         cur_time_max = time.struct_time(cur_time[0], cur_time[1],
-                                        cur_time[2], 23,
-                                        59, 59,
-                                        0, -1,
-                                        -1)
+                                        cur_time[2]+1, 23,
+                                        4, 59, 0, -1, -1)
         cur_time = cur_time_max
     cur_time = '{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{:s}'.format(cur_time[0],
     cur_time[1], cur_time[2], cur_time[3], cur_time[4], cur_time[5], "Z")
@@ -97,8 +95,7 @@ def get_calendar_events(calendar_id, max_events, time_min):
     Response is a list of events ordered by their start date/time in ascending order.
     """
     time_max = get_current_time(time_max=True)
-    print('min: ', time_min)
-    print('max: ', time_max)
+    print('Fetching calendar events from {0} to {1}'.format(time_min, time_max))
 
     headers = {'Authorization': 'Bearer ' + google_auth.access_token,
                'Accept': 'application/json',
@@ -156,7 +153,7 @@ def format_datetime(datetime, pretty_date=False):
 
 def display_calendar_events(events):
     # Display all calendar events
-    for event_idx in range(MAX_EVENTS):
+    for event_idx in range(len(events)):
         event = events[event_idx]
         event_name = event['summary']
         event_start = event['start']['dateTime']
