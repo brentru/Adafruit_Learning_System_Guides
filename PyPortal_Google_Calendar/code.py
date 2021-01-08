@@ -73,7 +73,7 @@ google_auth = OAuth2(
     secrets["google_refresh_token"]
 )
 
-def get_current_time():
+def get_current_time(time_max=False):
     """Gets local time from Adafruit IO and converts to RFC3339 timestamp.
 
     """
@@ -81,6 +81,13 @@ def get_current_time():
     pyportal.get_local_time(secrets['timezone'])
     # Format as RFC339 timestamp
     cur_time = r.datetime
+    if time_max: # maximum time to fetch events is tonight at 23:59:59p.
+        cur_time_max = time.struct_time(cur_time[0], cur_time[1],
+                                        cur_time[2], 23,
+                                        59, 59,
+                                        0, -1,
+                                        -1)
+        cur_time = cur_time_max
     cur_time = '{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{:s}'.format(cur_time[0],
     cur_time[1], cur_time[2], cur_time[3], cur_time[4], cur_time[5], "Z")
     return cur_time
@@ -89,12 +96,16 @@ def get_calendar_events(calendar_id, max_events, time_min):
     """Returns events on a specified calendar.
     Response is a list of events ordered by their start date/time in ascending order.
     """
+    time_max = get_current_time(time_max=True)
+    print('min: ', time_min)
+    print('max: ', time_max)
+
     headers = {'Authorization': 'Bearer ' + google_auth.access_token,
                'Accept': 'application/json',
                "Content-Length":"0"}
     url = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-    "/events?maxResults={1}&timeMin={2}&orderBy=startTime" \
-    "&singleEvents=true".format(calendar_id, max_events, time_min)
+    "/events?maxResults={1}&timeMin={2}&timeMax={3}&orderBy=startTime" \
+    "&singleEvents=true".format(calendar_id, max_events, time_min, time_max)
     resp = requests.get(url, headers=headers)
     resp_json = resp.json()
     if 'error' in resp_json:
@@ -103,7 +114,7 @@ def get_calendar_events(calendar_id, max_events, time_min):
     # parse the 'items' array so we can iterate over it easier
     events = []
     event_items = resp_json['items']
-    for event in range(0, max_events):
+    for event in range(0, len(event_items)):
         events.append(event_items[event])
     return events
 
@@ -131,11 +142,13 @@ def format_datetime(datetime, pretty_date=False):
     current_datetime = r.datetime
     # via https://github.com/micropython/micropython/issues/3087
     formatted_time = '{:02d}:{:02d}{:s}'.format(hours, minutes, am_pm)
+    """
     if not current_datetime[2] == mday:
         # event is another day, return the full datetime
         formatted_date = '{:02d}/{:02d}/{:04d} '.format(month, mday, year)
         return formatted_date + formatted_time
-    elif pretty_date: # return a nice date for header label
+    """
+    if pretty_date: # return a nice date for header label
         formatted_date = '{}. {:02d}, {:04d} '.format(MONTHS[month], mday, year)
         return formatted_date
     # Event occurs today, return the time only
