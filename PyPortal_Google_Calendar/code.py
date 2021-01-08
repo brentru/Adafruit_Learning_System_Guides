@@ -19,7 +19,7 @@ import rtc
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
 
 # Maximum amount of events to display
-MAX_EVENTS = 3
+MAX_EVENTS = 5
 
 # Amount of time to wait between refreshing the calendar, in minutes
 REFRESH_TIME = 15
@@ -147,18 +147,28 @@ def display_calendar_events(events):
         event = events[event_idx]
         event_name = event['summary']
         event_start = event['start']['dateTime']
-        event_end = event['end']['dateTime']
-        print("Event name: ", event_name)
-        # TODO: Parse the times 
-        print('Event start:' , format_datetime(event_start))
-        print('Event ends:', format_datetime(event_end))
-        print("---")
+        print("-"*40)
+        print("Event Description: ", event_name)
+        print('Event Time:' , format_datetime(event_start))
+        print("-"*40)
         # TODO
         # Generate new row to hold event details
         #line_event_row = Line(0, 60*(idx_event+2), 320, 60*(idx_event+2), color=0x000000)
         #frame.append(line_event_row)
-        # Generate new label to hold event info
-        # TODO
+        # Generate labels holding event info
+        label_event_time = label.Label(font_datetime,
+                                  x=0,
+                                  y=61+(event_idx*40),
+                                  color=0x000000,
+                                  text=format_datetime(event_start))
+        pyportal.splash.append(label_event_time)
+
+        label_event_desc = label.Label(font_desc,
+                                  x=75,
+                                  y=61+(event_idx*40),
+                                  color=0x000000,
+                                  text=event_name)
+        pyportal.splash.append(label_event_desc)
 
 # Initial refresh of access token
 print("Refreshing access token..")
@@ -171,20 +181,26 @@ if not google_auth.refresh_access_token():
 pyportal.set_background(0xFFFFFF)
 
 # Add the header
-line_header = Line(0, 60, 320, 60, color=0x000000)
+line_header = Line(0, 50, 320, 50, color=0x000000)
 pyportal.splash.append(line_header)
 font_h1 = bitmap_font.load_font("fonts/Arial-Bold-24.bdf")
-label_header = label.Label(font_h1, x=0, y=40,
-                           color=0x000000, max_glyphs=50)
-pyportal.splash.append(label_header)
+# TODO: preload font here, alphanumeric
+label_header = label.Label(font_h1, x=0, y=30,
+                           color=0x000000, max_glyphs=13)
 
+
+# Set up calendar event fonts
+font_datetime = bitmap_font.load_font("fonts/Arial-ItalicMT-17.bdf")
+font_desc = bitmap_font.load_font("fonts/Arial-14.pcf")
 
 
 while True:
     # fetch calendar events!
     print("fetching local time...")
     now = get_current_time()
+    # setup header label
     label_header.text = format_datetime(now, pretty_date=True)
+    pyportal.splash.append(label_header)
 
     print("fetching calendar events...")
     events = get_calendar_events(CALENDAR_ID, MAX_EVENTS, now)
