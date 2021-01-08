@@ -167,14 +167,14 @@ def display_calendar_events(events):
         #frame.append(line_event_row)
         # Generate labels holding event info
         label_event_time = label.Label(font_datetime,
-                                  x=0,
+                                  x=10,
                                   y=61+(event_idx*40),
                                   color=0x000000,
                                   text=format_datetime(event_start))
         pyportal.splash.append(label_event_time)
 
         label_event_desc = label.Label(font_desc,
-                                  x=75,
+                                  x=85,
                                   y=61+(event_idx*40),
                                   color=0x000000,
                                   text=event_name)
@@ -195,7 +195,7 @@ line_header = Line(0, 50, 320, 50, color=0x000000)
 pyportal.splash.append(line_header)
 font_h1 = bitmap_font.load_font("fonts/Arial-Bold-24.bdf")
 # TODO: preload font here, alphanumeric
-label_header = label.Label(font_h1, x=0, y=30,
+label_header = label.Label(font_h1, x=(board.DISPLAY.width//5)+1, y=30,
                            color=0x000000, max_glyphs=13)
 
 
