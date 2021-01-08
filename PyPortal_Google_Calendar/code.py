@@ -25,10 +25,20 @@ MAX_EVENTS = 4
 # Amount of time to wait between refreshing the calendar, in minutes
 REFRESH_TIME = 15
 
-MONTHS = {1:'Jan', 2:'Feb', 3:'Mar', 4:'Apr',
-          5:'May', 6:'Jun', 7:'Jul', 8:'Aug',
-          9:'Sep', 10:'Oct', 11:'Nov',
-          12:'Dec'}
+MONTHS = {
+    1: "Jan",
+    2: "Feb",
+    3: "Mar",
+    4: "Apr",
+    5: "May",
+    6: "Jun",
+    7: "Jul",
+    8: "Aug",
+    9: "Sep",
+    10: "Oct",
+    11: "Nov",
+    12: "Dec",
+}
 
 # Add a secrets.py to your filesystem that has a dictionary called secrets with "ssid" and
 # "password" keys with your WiFi credentials. DO NOT share that file or commit it into Git or other
@@ -68,53 +78,67 @@ requests.set_socket(socket, esp)
 # Initialize an OAuth2 object with GCal API scope
 scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
 google_auth = OAuth2(
-    requests, secrets["google_client_id"],
-    secrets["google_client_secret"], scopes,
+    requests,
+    secrets["google_client_id"],
+    secrets["google_client_secret"],
+    scopes,
     secrets["google_access_token"],
-    secrets["google_refresh_token"]
+    secrets["google_refresh_token"],
 )
 
-def get_current_time(time_max=False):
-    """Gets local time from Adafruit IO and converts to RFC3339 timestamp.
 
-    """
+def get_current_time(time_max=False):
+    """Gets local time from Adafruit IO and converts to RFC3339 timestamp."""
     # Get local time from Adafruit IO
-    pyportal.get_local_time(secrets['timezone'])
+    pyportal.get_local_time(secrets["timezone"])
     # Format as RFC339 timestamp
     cur_time = r.datetime
-    if time_max: # maximum time to fetch events is midnight (4:59:59UTC)
-        cur_time_max = time.struct_time(cur_time[0], cur_time[1],
-                                        cur_time[2]+1, 23,
-                                        4, 59, 0, -1, -1)
+    if time_max:  # maximum time to fetch events is midnight (4:59:59UTC)
+        cur_time_max = time.struct_time(
+            cur_time[0], cur_time[1], cur_time[2] + 1, 23, 4, 59, 0, -1, -1
+        )
         cur_time = cur_time_max
-    cur_time = '{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{:s}'.format(cur_time[0],
-    cur_time[1], cur_time[2], cur_time[3], cur_time[4], cur_time[5], "Z")
+    cur_time = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{:s}".format(
+        cur_time[0],
+        cur_time[1],
+        cur_time[2],
+        cur_time[3],
+        cur_time[4],
+        cur_time[5],
+        "Z",
+    )
     return cur_time
+
 
 def get_calendar_events(calendar_id, max_events, time_min):
     """Returns events on a specified calendar.
     Response is a list of events ordered by their start date/time in ascending order.
     """
     time_max = get_current_time(time_max=True)
-    print('Fetching calendar events from {0} to {1}'.format(time_min, time_max))
+    print("Fetching calendar events from {0} to {1}".format(time_min, time_max))
 
-    headers = {'Authorization': 'Bearer ' + google_auth.access_token,
-               'Accept': 'application/json',
-               "Content-Length":"0"}
-    url = "https://www.googleapis.com/calendar/v3/calendars/{0}" \
-    "/events?maxResults={1}&timeMin={2}&timeMax={3}&orderBy=startTime" \
-    "&singleEvents=true".format(calendar_id, max_events, time_min, time_max)
+    headers = {
+        "Authorization": "Bearer " + google_auth.access_token,
+        "Accept": "application/json",
+        "Content-Length": "0",
+    }
+    url = (
+        "https://www.googleapis.com/calendar/v3/calendars/{0}"
+        "/events?maxResults={1}&timeMin={2}&timeMax={3}&orderBy=startTime"
+        "&singleEvents=true".format(calendar_id, max_events, time_min, time_max)
+    )
     resp = requests.get(url, headers=headers)
     resp_json = resp.json()
-    if 'error' in resp_json:
+    if "error" in resp_json:
         raise RuntimeError("Error:", resp_json)
     resp.close()
     # parse the 'items' array so we can iterate over it easier
     events = []
-    event_items = resp_json['items']
+    event_items = resp_json["items"]
     for event in range(0, len(event_items)):
         events.append(event_items[event])
     return events
+
 
 def format_datetime(datetime, pretty_date=False):
     """Formats ISO-formatted datetime returned by Google Calendar API into
@@ -139,40 +163,46 @@ def format_datetime(datetime, pretty_date=False):
     # take datetime from rtc
     current_datetime = r.datetime
     # via https://github.com/micropython/micropython/issues/3087
-    formatted_time = '{:02d}:{:02d}{:s}'.format(hours, minutes, am_pm)
-    if pretty_date: # return a nice date for header label
-        formatted_date = '{}. {:02d}, {:04d} '.format(MONTHS[month], mday, year)
+    formatted_time = "{:02d}:{:02d}{:s}".format(hours, minutes, am_pm)
+    if pretty_date:  # return a nice date for header label
+        formatted_date = "{}. {:02d}, {:04d} ".format(MONTHS[month], mday, year)
         return formatted_date
     # Event occurs today, return the time only
     return formatted_time
+
 
 def display_calendar_events(events):
     # Display all calendar events
     for event_idx in range(len(events)):
         event = events[event_idx]
         # wrap event name around second line if necessary
-        event_name = PyPortal.wrap_nicely(event['summary'], 8)
-        event_name = "\n".join(event_name[0:2]) # only wrap 2 lines, truncate third..
-        event_start = event['start']['dateTime']
-        print("-"*40)
+        event_name = PyPortal.wrap_nicely(event["summary"], 25)
+        event_name = "\n".join(event_name[0:2])  # only wrap 2 lines, truncate third..
+        event_start = event["start"]["dateTime"]
+        print("-" * 40)
         print("Event Description: ", event_name)
-        print('Event Time:' , format_datetime(event_start))
-        print("-"*40)
+        print("Event Time:", format_datetime(event_start))
+        print("-" * 40)
         # Generate labels holding event info
-        label_event_time = label.Label(font_datetime,
-                                  x=5,
-                                  y=70+(event_idx*40),
-                                  color=0x000000,
-                                  text=format_datetime(event_start))
+        label_event_time = label.Label(
+            font_datetime,
+            x=7,
+            y=70 + (event_idx * 40),
+            color=0x000000,
+            text=format_datetime(event_start),
+        )
         pyportal.splash.append(label_event_time)
 
-        label_event_desc = label.Label(font_desc,
-                                  x=85,
-                                  y=70+(event_idx*40),
-                                  color=0x000000,
-                                  text=event_name,
-                                  line_spacing=0.75)
+        label_event_desc = label.Label(
+            font_desc,
+            x=88,
+            y=70 + (event_idx * 40),
+            color=0x000000,
+            text=event_name,
+            line_spacing=0.75,
+        )
         pyportal.splash.append(label_event_desc)
+
 
 # Initial refresh of access token
 print("Refreshing access token..")
@@ -185,23 +215,28 @@ if not google_auth.refresh_access_token():
 pyportal.set_background(0xFFFFFF)
 
 # Add the header
-#line_header = Line(0, 50, 320, 50, color=0x000000)
-#pyportal.splash.append(line_header)
-frame = Rect(0, 50, 10, 10, outline=2)
+# line_header = Line(0, 50, 320, 50, color=0x000000)
+# pyportal.splash.append(line_header)
+frame = Rect(0, 50, 320, 190, outline=1, stroke=5)
 
 pyportal.splash.append(frame)
 
 font_h1 = bitmap_font.load_font("fonts/Arial-Bold-24.bdf")
-font_h1.load_glyphs(b'abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-,. ')
-label_header = label.Label(font_h1, x=(board.DISPLAY.width//5)+1, y=30,
-                           color=0x000000, max_glyphs=13)
+font_h1.load_glyphs(
+    b"abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-,. "
+)
+label_header = label.Label(
+    font_h1, x=(board.DISPLAY.width // 5) + 1, y=30, color=0x000000, max_glyphs=13
+)
 pyportal.splash.append(label_header)
 
 # Set up calendar event fonts
 font_datetime = bitmap_font.load_font("fonts/Arial-14.pcf")
-font_datetime.load_glyphs(b'am:p1234567890')
+font_datetime.load_glyphs(b"am:p1234567890")
 font_desc = bitmap_font.load_font("fonts/Arial-14.pcf")
-font_desc.load_glyphs(b'abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890- ()')
+font_desc.load_glyphs(
+    b"abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890- ()"
+)
 
 
 while True:
@@ -219,5 +254,5 @@ while True:
 
     board.DISPLAY.show(pyportal.splash)
 
-    print("Sleeping for %d minutes"%REFRESH_TIME)
+    print("Sleeping for %d minutes" % REFRESH_TIME)
     time.sleep(REFRESH_TIME * 60)
