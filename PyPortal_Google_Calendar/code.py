@@ -9,6 +9,7 @@ from adafruit_esp32spi import adafruit_esp32spi
 import adafruit_requests as requests
 from adafruit_oauth2 import OAuth2
 import displayio
+from adafruit_display_shapes.rect import Rect
 from adafruit_display_shapes.line import Line
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text import label
@@ -19,7 +20,7 @@ import rtc
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
 
 # Maximum amount of events to display
-MAX_EVENTS = 5
+MAX_EVENTS = 4
 
 # Amount of time to wait between refreshing the calendar, in minutes
 REFRESH_TIME = 15
@@ -139,12 +140,6 @@ def format_datetime(datetime, pretty_date=False):
     current_datetime = r.datetime
     # via https://github.com/micropython/micropython/issues/3087
     formatted_time = '{:02d}:{:02d}{:s}'.format(hours, minutes, am_pm)
-    """
-    if not current_datetime[2] == mday:
-        # event is another day, return the full datetime
-        formatted_date = '{:02d}/{:02d}/{:04d} '.format(month, mday, year)
-        return formatted_date + formatted_time
-    """
     if pretty_date: # return a nice date for header label
         formatted_date = '{}. {:02d}, {:04d} '.format(MONTHS[month], mday, year)
         return formatted_date
@@ -155,29 +150,28 @@ def display_calendar_events(events):
     # Display all calendar events
     for event_idx in range(len(events)):
         event = events[event_idx]
-        event_name = event['summary']
+        # wrap event name around second line if necessary
+        event_name = PyPortal.wrap_nicely(event['summary'], 8)
+        event_name = "\n".join(event_name[0:2]) # only wrap 2 lines, truncate third..
         event_start = event['start']['dateTime']
         print("-"*40)
         print("Event Description: ", event_name)
         print('Event Time:' , format_datetime(event_start))
         print("-"*40)
-        # TODO
-        # Generate new row to hold event details
-        #line_event_row = Line(0, 60*(idx_event+2), 320, 60*(idx_event+2), color=0x000000)
-        #frame.append(line_event_row)
         # Generate labels holding event info
         label_event_time = label.Label(font_datetime,
-                                  x=10,
-                                  y=61+(event_idx*40),
+                                  x=5,
+                                  y=70+(event_idx*40),
                                   color=0x000000,
                                   text=format_datetime(event_start))
         pyportal.splash.append(label_event_time)
 
         label_event_desc = label.Label(font_desc,
                                   x=85,
-                                  y=61+(event_idx*40),
+                                  y=70+(event_idx*40),
                                   color=0x000000,
-                                  text=event_name)
+                                  text=event_name,
+                                  line_spacing=0.75)
         pyportal.splash.append(label_event_desc)
 
 # Initial refresh of access token
@@ -191,17 +185,23 @@ if not google_auth.refresh_access_token():
 pyportal.set_background(0xFFFFFF)
 
 # Add the header
-line_header = Line(0, 50, 320, 50, color=0x000000)
-pyportal.splash.append(line_header)
+#line_header = Line(0, 50, 320, 50, color=0x000000)
+#pyportal.splash.append(line_header)
+frame = Rect(0, 50, 10, 10, outline=2)
+
+pyportal.splash.append(frame)
+
 font_h1 = bitmap_font.load_font("fonts/Arial-Bold-24.bdf")
-# TODO: preload font here, alphanumeric
+font_h1.load_glyphs(b'abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-,. ')
 label_header = label.Label(font_h1, x=(board.DISPLAY.width//5)+1, y=30,
                            color=0x000000, max_glyphs=13)
-
+pyportal.splash.append(label_header)
 
 # Set up calendar event fonts
-font_datetime = bitmap_font.load_font("fonts/Arial-ItalicMT-17.bdf")
+font_datetime = bitmap_font.load_font("fonts/Arial-14.pcf")
+font_datetime.load_glyphs(b'am:p1234567890')
 font_desc = bitmap_font.load_font("fonts/Arial-14.pcf")
+font_desc.load_glyphs(b'abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890- ()')
 
 
 while True:
@@ -210,7 +210,6 @@ while True:
     now = get_current_time()
     # setup header label
     label_header.text = format_datetime(now, pretty_date=True)
-    pyportal.splash.append(label_header)
 
     print("fetching calendar events...")
     events = get_calendar_events(CALENDAR_ID, MAX_EVENTS, now)
