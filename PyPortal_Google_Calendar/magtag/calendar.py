@@ -10,9 +10,7 @@ import socketpool
 import adafruit_requests as requests
 from adafruit_oauth2 import OAuth2
 import displayio
-from adafruit_display_shapes.rect import Rect
 from adafruit_display_shapes.line import Line
-# TODO: Maybe use the line instead for MagTag
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text import label
 from adafruit_magtag.magtag import MagTag
@@ -21,7 +19,7 @@ from adafruit_magtag.magtag import MagTag
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
 
 # Maximum amount of events to display
-MAX_EVENTS = 5
+MAX_EVENTS = 3
 
 # Amount of time to wait between refreshing the calendar, in minutes
 REFRESH_TIME = 15
@@ -155,7 +153,6 @@ def format_datetime(datetime, pretty_date=False):
     # Event occurs today, return the time only
     return formatted_time
 
-# TODO: Labels re-generating may cause issue...
 def display_calendar_events(events):
     # Display all calendar events
     for event_idx in range(len(events)):
@@ -172,7 +169,7 @@ def display_calendar_events(events):
         label_event_time = label.Label(
             font_datetime,
             x=7,
-            y=30 + (event_idx * 35),
+            y=35 + (event_idx * 35),
             color=0x000000,
             text=format_datetime(event_start),
         )
@@ -181,7 +178,7 @@ def display_calendar_events(events):
         label_event_desc = label.Label(
             font_desc,
             x=88,
-            y=30 + (event_idx * 35),
+            y=35 + (event_idx * 35),
             color=0x000000,
             text=event_name,
             line_spacing=0.65,
@@ -192,7 +189,7 @@ def display_calendar_events(events):
 magtag.set_background(0xFFFFFF)
 
 # Add the header
-line_header = Line(0, 20, 320, 20, color=0x000000)
+line_header = Line(0, 25, 320, 25, color=0x000000)
 magtag.splash.append(line_header)
 
 font_h1 = bitmap_font.load_font("fonts/Arial-Bold-18.pcf")
@@ -223,7 +220,6 @@ while True:
         if not google_auth.refresh_access_token():
             raise RuntimeError("Unable to refresh access token - has the token been revoked?")
         access_token_obtained = int(time.monotonic())
-
 
     # fetch calendar events!
     print("fetching local time...")
