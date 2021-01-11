@@ -36,7 +36,6 @@ font_large = bitmap_font.load_font("/fonts/Arial-14.pcf")
 
 graphics = Graphics(auto_refresh=False)
 display = graphics.display
-#group_verification = displayio.Group(max_size=14)
 
 background = Rect(0, 0, 296, 128, fill=0xFFFFFF)
 graphics.splash.append(background)
@@ -109,3 +108,11 @@ print("\tAccess Token Scope:", google_auth.access_token_scope)
 print("\tAccess token expires in: %d seconds" % google_auth.access_token_expiration)
 print("\tRefresh Token:", google_auth.refresh_token)
 print("-" * 40)
+
+graphics.splash.pop()
+graphics.splash.pop()
+graphics.splash.pop()
+
+label_overview_text.text = "Successfully Authenticated!"
+label_verification_url.text = "Check the REPL for tokens to add\n\tto your secrets.py file"
+display.refresh()
