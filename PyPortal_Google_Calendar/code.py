@@ -162,8 +162,6 @@ def format_datetime(datetime, pretty_date=False):
         am_pm = "pm"
         # convert to 12hr time
         hours -= 12
-    # take datetime from rtc
-    current_datetime = r.datetime
     # via https://github.com/micropython/micropython/issues/3087
     formatted_time = "{:02d}:{:02d}{:s}".format(hours, minutes, am_pm)
     if pretty_date:  # return a nice date for header label
@@ -206,14 +204,6 @@ def display_calendar_events(events):
         pyportal.splash.append(label_event_desc)
 
 
-# Initial refresh of access token
-print("Refreshing access token..")
-# TODO: Take a timestamp of when we requested this
-# so we can check against expiration!
-if not google_auth.refresh_access_token():
-    raise RuntimeError("Unable to refresh access token - has the token been revoked?")
-
-
 pyportal.set_background(0xFFFFFF)
 
 # Add the header
@@ -240,11 +230,24 @@ font_desc.load_glyphs(
     b"abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890- ()"
 )
 
+if not google_auth.refresh_access_token():
+    raise RuntimeError("Unable to refresh access token - has the token been revoked?")
+access_token_obtained = int(time.monotonic())
 
 while True:
+    # check if we need to refresh token
+    cur_time = int(time.monotonic())
+    if cur_time < (access_token_obtained + google_auth.access_token_expiration):
+        print("Access token expired, refreshing...")
+        if not google_auth.refresh_access_token():
+            raise RuntimeError("Unable to refresh access token - has the token been revoked?")
+        access_token_obtained = time.monotonic()
+
+
     # fetch calendar events!
     print("fetching local time...")
     now = get_current_time()
+
     # setup header label
     label_header.text = format_datetime(now, pretty_date=True)
 
