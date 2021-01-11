@@ -1,13 +1,10 @@
 # Google OAuth2.0 Workflow for MagTag
-import board
-import ipaddress
 import ssl
+import board
 import wifi
 import socketpool
 import adafruit_requests as requests
 from adafruit_oauth2 import OAuth2
-import adafruit_miniqr
-import displayio
 from adafruit_display_text.label import Label
 from adafruit_bitmap_font import bitmap_font
 from adafruit_magtag.magtag import Graphics
