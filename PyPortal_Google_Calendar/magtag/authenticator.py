@@ -13,7 +13,6 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_magtag.magtag import Graphics
 from adafruit_display_shapes.rect import Rect
 
-
 # Add a secrets.py to your filesystem that has a dictionary called secrets with "ssid" and
 # "password" keys with your WiFi credentials. DO NOT share that file or commit it into Git or other
 # source control.
