@@ -236,12 +236,11 @@ access_token_obtained = int(time.monotonic())
 
 while True:
     # check if we need to refresh token
-    cur_time = int(time.monotonic())
-    if cur_time < (access_token_obtained + google_auth.access_token_expiration):
+    if int(time.monotonic()) - access_token_obtained >= google_auth.access_token_expiration:
         print("Access token expired, refreshing...")
         if not google_auth.refresh_access_token():
             raise RuntimeError("Unable to refresh access token - has the token been revoked?")
-        access_token_obtained = time.monotonic()
+        access_token_obtained = int(time.monotonic())
 
 
     # fetch calendar events!
