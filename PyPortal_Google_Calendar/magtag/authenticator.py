@@ -102,12 +102,9 @@ if not google_auth.wait_for_authorization():
     raise RuntimeError("Timed out waiting for browser response!")
 
 print("Successfully Authenticated with Google!")
-print("-" * 40)
-print("\tAccess Token:", google_auth.access_token)
-print("\tAccess Token Scope:", google_auth.access_token_scope)
-print("\tAccess token expires in: %d seconds" % google_auth.access_token_expiration)
-print("\tRefresh Token:", google_auth.refresh_token)
-print("-" * 40)
+print("Add the following lines to your secrets.py file:")
+print('\t\'google_access_token\' ' + ":" + " \'%s\',"%google_auth.access_token)
+print('\t\'google_refresh_token\' ' + ":" + " \'%s\'"%google_auth.refresh_token)
 
 graphics.splash.pop()
 graphics.splash.pop()
