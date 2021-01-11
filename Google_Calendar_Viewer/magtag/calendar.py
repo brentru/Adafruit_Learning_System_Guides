@@ -1,26 +1,23 @@
-# PyPortal Google Calendar Viewer
+# MagTag Google Calendar Event Viewer
 # Brent Rubell for Adafruit Industries, 2021
 import time
+import ssl
 import board
-import busio
-from digitalio import DigitalInOut
-import adafruit_esp32spi.adafruit_esp32spi_socket as socket
-from adafruit_esp32spi import adafruit_esp32spi
+import rtc
+import wifi
+import socketpool
 import adafruit_requests as requests
 from adafruit_oauth2 import OAuth2
-import displayio
-from adafruit_display_shapes.rect import Rect
 from adafruit_display_shapes.line import Line
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text import label
-from adafruit_pyportal import PyPortal
-import rtc
+from adafruit_magtag.magtag import MagTag
 
 # Calendar ID
 CALENDAR_ID = "ajfon6phl7n1dmpjsdlevtqa04@group.calendar.google.com"
 
 # Maximum amount of events to display
-MAX_EVENTS = 4
+MAX_EVENTS = 3
 
 # Amount of time to wait between refreshing the calendar, in minutes
 REFRESH_TIME = 15
@@ -47,33 +44,18 @@ MONTHS = {
 try:
     from secrets import secrets
 except ImportError:
-    print("WiFi secrets are kept in secrets.py, please add them there!")
+    print("Credentials and tokens are kept in secrets.py, please add them there!")
     raise
 
-# If you are using a board with pre-defined ESP32 Pins:
-esp32_cs = DigitalInOut(board.ESP_CS)
-esp32_ready = DigitalInOut(board.ESP_BUSY)
-esp32_reset = DigitalInOut(board.ESP_RESET)
+print("Connecting to %s" % secrets["ssid"])
+wifi.radio.connect(secrets["ssid"], secrets["password"])
+print("Connected to %s!" % secrets["ssid"])
 
-spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
+pool = socketpool.SocketPool(wifi.radio)
+requests = requests.Session(pool, ssl.create_default_context())
 
-print("Connecting to AP...")
-while not esp.is_connected:
-    try:
-        esp.connect_AP(secrets["ssid"], secrets["password"])
-    except RuntimeError as e:
-        print("could not connect to AP, retrying: ", e)
-        continue
-print("Connected to", str(esp.ssid, "utf-8"), "\tRSSI:", esp.rssi)
-
-# Create the PyPortal object
-pyportal = PyPortal(esp=esp, external_spi=spi)
+magtag = MagTag()
 r = rtc.RTC()
-
-# Initialize a requests object with a socket and esp32spi interface
-socket.set_interface(esp)
-requests.set_socket(socket, esp)
 
 # Initialize an OAuth2 object with GCal API scope
 scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
@@ -90,7 +72,7 @@ google_auth = OAuth2(
 def get_current_time(time_max=False):
     """Gets local time from Adafruit IO and converts to RFC3339 timestamp."""
     # Get local time from Adafruit IO
-    pyportal.get_local_time(secrets["timezone"])
+    magtag.get_local_time(secrets["timezone"])
     # Format as RFC339 timestamp
     cur_time = r.datetime
     if time_max:  # maximum time to fetch events is midnight (4:59:59UTC)
@@ -133,13 +115,13 @@ def get_calendar_events(calendar_id, max_events, time_min):
         raise RuntimeError("Error:", resp_json)
     resp.close()
     # parse the 'items' array so we can iterate over it easier
-    events = []
-    event_items = resp_json["items"]
-    if not event_items:
+    items = []
+    resp_items = resp_json["items"]
+    if not resp_items:
         print("No events scheduled for today!")
-    for event in range(0, len(event_items)):
-        events.append(event_items[event])
-    return events
+    for event in range(0, len(resp_items)):
+        items.append(resp_items[event])
+    return items
 
 
 def format_datetime(datetime, pretty_date=False):
@@ -156,12 +138,13 @@ def format_datetime(datetime, pretty_date=False):
     the_time = the_time.split("-")[0]
     if "Z" in the_time:
         the_time = the_time.split("Z")[0]
-    hours, minutes, seconds = [int(x) for x in the_time.split(":")]
+    hours, minutes, _ = [int(x) for x in the_time.split(":")]
     am_pm = "am"
     if hours >= 12:
         am_pm = "pm"
         # convert to 12hr time
-        hours -= 12
+        if not hours == 12:
+            hours -= 12
     # via https://github.com/micropython/micropython/issues/3087
     formatted_time = "{:02d}:{:02d}{:s}".format(hours, minutes, am_pm)
     if pretty_date:  # return a nice date for header label
@@ -171,12 +154,12 @@ def format_datetime(datetime, pretty_date=False):
     return formatted_time
 
 
-def display_calendar_events(events):
+def display_calendar_events(resp_events):
     # Display all calendar events
-    for event_idx in range(len(events)):
-        event = events[event_idx]
+    for event_idx in range(len(resp_events)):
+        event = resp_events[event_idx]
         # wrap event name around second line if necessary
-        event_name = PyPortal.wrap_nicely(event["summary"], 25)
+        event_name = magtag.wrap_nicely(event["summary"], 25)
         event_name = "\n".join(event_name[0:2])  # only wrap 2 lines, truncate third..
         event_start = event["start"]["dateTime"]
         print("-" * 40)
@@ -187,45 +170,42 @@ def display_calendar_events(events):
         label_event_time = label.Label(
             font_datetime,
             x=7,
-            y=70 + (event_idx * 40),
+            y=35 + (event_idx * 35),
             color=0x000000,
             text=format_datetime(event_start),
         )
-        pyportal.splash.append(label_event_time)
+        magtag.splash.append(label_event_time)
 
         label_event_desc = label.Label(
             font_desc,
             x=88,
-            y=70 + (event_idx * 40),
+            y=35 + (event_idx * 35),
             color=0x000000,
             text=event_name,
-            line_spacing=0.75,
+            line_spacing=0.65,
         )
-        pyportal.splash.append(label_event_desc)
+        magtag.splash.append(label_event_desc)
 
 
-pyportal.set_background(0xFFFFFF)
+magtag.set_background(0xFFFFFF)
 
 # Add the header
-# line_header = Line(0, 50, 320, 50, color=0x000000)
-# pyportal.splash.append(line_header)
-frame = Rect(0, 50, 320, 190, outline=1, stroke=5)
+line_header = Line(0, 25, 320, 25, color=0x000000)
+magtag.splash.append(line_header)
 
-pyportal.splash.append(frame)
-
-font_h1 = bitmap_font.load_font("fonts/Arial-Bold-24.bdf")
+font_h1 = bitmap_font.load_font("fonts/Arial-Bold-18.pcf")
 font_h1.load_glyphs(
     b"abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-,. "
 )
 label_header = label.Label(
-    font_h1, x=(board.DISPLAY.width // 5) + 1, y=30, color=0x000000, max_glyphs=13
+    font_h1, x=(board.DISPLAY.width // 5) + 1, y=10, color=0x000000, max_glyphs=13
 )
-pyportal.splash.append(label_header)
+magtag.splash.append(label_header)
 
 # Set up calendar event fonts
-font_datetime = bitmap_font.load_font("fonts/Arial-14.pcf")
+font_datetime = bitmap_font.load_font("fonts/Arial-12.pcf")
 font_datetime.load_glyphs(b"am:p1234567890")
-font_desc = bitmap_font.load_font("fonts/Arial-14.pcf")
+font_desc = bitmap_font.load_font("fonts/Arial-12.pcf")
 font_desc.load_glyphs(
     b"abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890- ()"
 )
@@ -236,12 +216,16 @@ access_token_obtained = int(time.monotonic())
 
 while True:
     # check if we need to refresh token
-    if int(time.monotonic()) - access_token_obtained >= google_auth.access_token_expiration:
+    if (
+        int(time.monotonic()) - access_token_obtained
+        >= google_auth.access_token_expiration
+    ):
         print("Access token expired, refreshing...")
         if not google_auth.refresh_access_token():
-            raise RuntimeError("Unable to refresh access token - has the token been revoked?")
+            raise RuntimeError(
+                "Unable to refresh access token - has the token been revoked?"
+            )
         access_token_obtained = int(time.monotonic())
-
 
     # fetch calendar events!
     print("fetching local time...")
@@ -256,7 +240,8 @@ while True:
     print("displaying events")
     display_calendar_events(events)
 
-    board.DISPLAY.show(pyportal.splash)
+    board.DISPLAY.show(magtag.splash)
+    board.DISPLAY.refresh()
 
     print("Sleeping for %d minutes" % REFRESH_TIME)
-    time.sleep(REFRESH_TIME * 60)
+    magtag.exit_and_deep_sleep(REFRESH_TIME * 60)

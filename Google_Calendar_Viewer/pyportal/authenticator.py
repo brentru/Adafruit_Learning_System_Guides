@@ -62,34 +62,23 @@ except OSError as error:
 font_small = bitmap_font.load_font("/fonts/Arial-12.pcf")
 font_large = bitmap_font.load_font("/fonts/Arial-14.pcf")
 # preload fonts
-glyphs = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.: '
+glyphs = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.: "
 font_small.load_glyphs(glyphs)
 font_large.load_glyphs(glyphs)
 
 group_verification = displayio.Group(max_size=25)
-label_overview_text = Label(font_large,
-                        x=0,
-                        y=45,
-                        text="To authorize this device with Google:")
+label_overview_text = Label(
+    font_large, x=0, y=45, text="To authorize this device with Google:"
+)
 group_verification.append(label_overview_text)
 
-label_verification_url = Label(font_small,
-                               x=0,
-                               y=100,
-                               line_spacing=1,
-                               max_glyphs=90)
+label_verification_url = Label(font_small, x=0, y=100, line_spacing=1, max_glyphs=90)
 group_verification.append(label_verification_url)
 
-label_user_code = Label(font_small,
-                        x=0,
-                        y=150,
-                        max_glyphs=50)
+label_user_code = Label(font_small, x=0, y=150, max_glyphs=50)
 group_verification.append(label_user_code)
 
-label_qr_code = Label(font_small,
-                        x=0,
-                        y=190,
-                        text="Or scan the QR code:")
+label_qr_code = Label(font_small, x=0, y=190, text="Or scan the QR code:")
 group_verification.append(label_qr_code)
 
 
@@ -116,8 +105,9 @@ def bitmap_QR(matrix):
 scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 # Initialize an oauth2 object
-google_auth = OAuth2(requests, secrets['google_client_id'],
-                     secrets['google_client_secret'], scopes)
+google_auth = OAuth2(
+    requests, secrets["google_client_id"], secrets["google_client_secret"], scopes
+)
 
 
 # Request device and user codes
@@ -129,12 +119,17 @@ google_auth.request_codes()
 # long enough to handle the user_code and verification_url.
 # Details in link below:
 # https://developers.google.com/identity/protocols/oauth2/limited-input-device#displayingthecode
-print("1) Navigate to the following URL in a web browser:", google_auth.verification_url)
+print(
+    "1) Navigate to the following URL in a web browser:", google_auth.verification_url
+)
 print("2) Enter the following code:", google_auth.user_code)
 
 # modify display labels to show verification URL and user code
-label_verification_url.text = "1. On your computer or mobile device,\n    go to: %s"%google_auth.verification_url
-label_user_code.text = "2. Enter code: %s"%google_auth.user_code
+label_verification_url.text = (
+    "1. On your computer or mobile device,\n    go to: %s"
+    % google_auth.verification_url
+)
+label_user_code.text = "2. Enter code: %s" % google_auth.user_code
 
 # Create a QR code
 qr = adafruit_miniqr.QRCode(qr_type=3, error_correct=adafruit_miniqr.L)
@@ -150,9 +145,7 @@ palette[1] = 0x000000
 # we'll scale the QR code as big as the display can handle
 scale = 15
 # then center it!
-qr_img = displayio.TileGrid(qr_bitmap,
-                            pixel_shader=palette,
-                            x=170, y=165)
+qr_img = displayio.TileGrid(qr_bitmap, pixel_shader=palette, x=170, y=165)
 group_verification.append(qr_img)
 # show the group
 board.DISPLAY.show(group_verification)
@@ -168,22 +161,24 @@ print("Successfully Authenticated with Google!")
 if sdcard is None:
     # print formatted keys for adding to secrets.py
     print("Add the following lines to your secrets.py file:")
-    print('\t\'google_access_token\' ' + ":" + " \'%s\',"%google_auth.access_token)
-    print('\t\'google_refresh_token\' ' + ":" + " \'%s\'"%google_auth.refresh_token)
+    print("\t'google_access_token' " + ":" + " '%s'," % google_auth.access_token)
+    print("\t'google_refresh_token' " + ":" + " '%s'" % google_auth.refresh_token)
     # Remove QR code and code/verification labels
     group_verification.pop()
     group_verification.pop()
     group_verification.pop()
 
     label_overview_text.text = "Successfully Authenticated!"
-    label_verification_url.text = "Check the REPL for tokens to add\n\tto your secrets.py file"
+    label_verification_url.text = (
+        "Check the REPL for tokens to add\n\tto your secrets.py file"
+    )
 else:
     # write secrets to sd card
     print("Writing secrets to SD...")
     with open("/sd/secrets-google.py", "w") as f:
-        f.write('google_secrets = {')
-        f.write('\'google_auth_access_token\' ' + ":" + " \'%s\',"%access_token)
-        f.write('\'google_auth_access_token\' ' + ":" + " \'%s\'}"%access_token)
+        f.write("google_secrets = {")
+        f.write("'google_auth_access_token' " + ":" + " '%s'," % access_token)
+        f.write("'google_auth_access_token' " + ":" + " '%s'}" % access_token)
     print("Wrote secret google tokens to SD card!")
 
 # prevent exit
