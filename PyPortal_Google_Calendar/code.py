@@ -95,7 +95,7 @@ def get_current_time(time_max=False):
     cur_time = r.datetime
     if time_max:  # maximum time to fetch events is midnight (4:59:59UTC)
         cur_time_max = time.struct_time(
-            cur_time[0], cur_time[1], cur_time[2] + 1, 23, 4, 59, 0, -1, -1
+            cur_time[0], cur_time[1], cur_time[2] + 1, 4, 59, 59, 0, -1, -1
         )
         cur_time = cur_time_max
     cur_time = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{:s}".format(
@@ -135,6 +135,8 @@ def get_calendar_events(calendar_id, max_events, time_min):
     # parse the 'items' array so we can iterate over it easier
     events = []
     event_items = resp_json["items"]
+    if not event_items:
+        print("No events scheduled for today!")
     for event in range(0, len(event_items)):
         events.append(event_items[event])
     return events
