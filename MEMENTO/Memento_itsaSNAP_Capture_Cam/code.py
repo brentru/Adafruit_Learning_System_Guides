@@ -134,7 +134,7 @@ while True:
             capture_send_image()
 
         time.sleep(0.1)
-    except MQTT.MMQTTException as mqtt_error:
+    except (MQTT.MMQTTException, MQTT.MMQTTStateError) as mqtt_error:
         print(f"MQTT Error: {mqtt_error}")
         time.sleep(5)
         print("Attempting to reconnect...")
